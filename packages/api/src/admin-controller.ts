@@ -1,7 +1,7 @@
 import { AIManager } from "@ai-chat-platform/ai-manager";
 import { VectorStoreManager } from "@ai-chat-platform/vector-store";
 import { EmbeddingManager } from "@ai-chat-platform/embedding-manager";
-import { ChatUsageLog } from "@ai-chat-platform/chat-service";
+import { ChatUsageLog, ResponseCache } from "@ai-chat-platform/chat-service";
 import { PROVIDER_CATALOG, PLANNED_PROVIDERS } from "@ai-chat-platform/provider-catalog";
 import { prisma } from "@ai-chat-platform/database";
 
@@ -16,7 +16,8 @@ export class AdminController {
     private readonly ai: AIManager,
     private readonly vectorStore: VectorStoreManager,
     private readonly embeddings: EmbeddingManager,
-    private readonly chatUsageLog: ChatUsageLog
+    private readonly chatUsageLog: ChatUsageLog,
+    private readonly responseCache: ResponseCache
   ) {}
 
   providers() {
@@ -66,6 +67,7 @@ export class AdminController {
     return {
       ai: this.ai.getUsage(),
       embeddings: this.embeddings.getUsage(),
+      cache: this.responseCache.stats(),
     };
   }
 

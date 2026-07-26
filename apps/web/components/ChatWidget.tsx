@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Message {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "agent";
   content: string;
   provider?: string;
   tokens?: number;
   confidence?: number;
+  cached?: boolean;
 }
 
 function getSessionId(): string {
@@ -27,10 +28,39 @@ export function ChatWidget() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [waitingForAgent, setWaitingForAgent] = useState(false);
+  const seenCount = useRef(0);
 
   useEffect(() => {
     setSessionId(getSessionId());
   }, []);
+
+  // Once a human handoff happens, poll for the agent's replies — the
+  // server can't push to the browser without a websocket, so this is
+  // the simplest thing that works for a first version.
+  useEffect(() => {
+    if (!waitingForAgent || !sessionId) return;
+
+    const interval = setInterval(async () => {
+      const res = await fetch(`/api/chat/messages?sessionId=${sessionId}`);
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const history: { role: string; content: string }[] = data.messages ?? [];
+      const agentMessages = history.filter((m) => m.role === "agent");
+
+      if (agentMessages.length > seenCount.current) {
+        const newOnes = agentMessages.slice(seenCount.current);
+        seenCount.current = agentMessages.length;
+        setMessages((prev) => [
+          ...prev,
+          ...newOnes.map((m) => ({ role: "agent" as const, content: m.content })),
+        ]);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [waitingForAgent, sessionId]);
 
   async function send() {
     const message = input.trim();
@@ -49,6 +79,10 @@ export function ChatWidget() {
 
       const data = await res.json();
 
+      if (res.ok && data.handoff) {
+        setWaitingForAgent(true);
+      }
+
       setMessages((prev) => [
         ...prev,
         res.ok
@@ -58,6 +92,7 @@ export function ChatWidget() {
               provider: data.provider,
               tokens: data.tokens,
               confidence: data.confidence,
+              cached: data.cached,
             }
           : { role: "assistant", content: `Error: ${data.detail ?? data.error}` },
       ]);
@@ -73,7 +108,10 @@ export function ChatWidget() {
 
   return (
     <div>
-      <p style={{ opacity: 0.5, fontSize: 12 }}>Chat ID: {sessionId}</p>
+      <p style={{ opacity: 0.5, fontSize: 12 }}>
+        Chat ID: {sessionId}
+        {waitingForAgent && " · connected to a human agent"}
+      </p>
 
       <div
         style={{
@@ -95,12 +133,16 @@ export function ChatWidget() {
         {messages.map((m, i) => (
           <div key={i}>
             <div>
-              <strong>{m.role === "user" ? "You" : "Assistant"}:</strong>{" "}
+              <strong>
+                {m.role === "user" ? "You" : m.role === "agent" ? "Agent" : "Assistant"}:
+              </strong>{" "}
               {m.content}
             </div>
             {m.role === "assistant" && m.provider && (
               <div style={{ fontSize: 11, opacity: 0.5 }}>
-                {m.provider} · {Math.round((m.confidence ?? 0) * 100)}% confidence ·{" "}
+                {m.provider}
+                {m.cached && " (cached, 0 tokens)"} ·{" "}
+                {Math.round((m.confidence ?? 0) * 100)}% confidence ·{" "}
                 {m.tokens} tokens
               </div>
             )}

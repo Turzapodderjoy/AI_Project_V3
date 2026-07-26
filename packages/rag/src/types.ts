@@ -8,4 +8,6 @@ export interface AskResponse {
   provider: string;
   tokens: number;
   confidence: number;
+  cached?: boolean;
+  handoff?: boolean;
 }

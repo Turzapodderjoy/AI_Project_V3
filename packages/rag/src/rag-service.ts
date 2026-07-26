@@ -26,6 +26,8 @@ export class RagService {
       provider: response.provider,
       tokens: response.tokens,
       confidence: response.confidence,
+      cached: response.cached,
+      handoff: response.handoff,
     };
   }
 }

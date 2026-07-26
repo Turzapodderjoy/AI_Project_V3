@@ -1,0 +1,76 @@
+import { cosineSimilarity } from "@ai-chat-platform/retriever";
+
+export interface CachedAnswer {
+  question: string;
+  answer: string;
+  provider: string;
+  confidence: number;
+  hits: number;
+}
+
+interface CacheEntry extends CachedAnswer {
+  embedding: number[];
+}
+
+/**
+ * Semantic cache: a new question that means roughly the same thing as one
+ * already answered (high embedding cosine similarity, not exact string
+ * match — so paraphrases hit too) reuses the stored answer instead of
+ * spending LLM tokens on it again. In-memory only, same caveat as the
+ * other trackers: move to Postgres once conversations are persisted.
+ */
+export class ResponseCache {
+  private readonly entries: CacheEntry[] = [];
+
+  constructor(
+    private readonly threshold = 0.93,
+    private readonly maxEntries = 500
+  ) {}
+
+  find(embedding: number[]): CachedAnswer | null {
+    let best: { entry: CacheEntry; score: number } | null = null;
+
+    for (const entry of this.entries) {
+      const score = cosineSimilarity(embedding, entry.embedding);
+
+      if (score >= this.threshold && (!best || score > best.score)) {
+        best = { entry, score };
+      }
+    }
+
+    if (!best) {
+      return null;
+    }
+
+    best.entry.hits += 1;
+    return best.entry;
+  }
+
+  store(
+    embedding: number[],
+    question: string,
+    answer: string,
+    provider: string,
+    confidence: number
+  ): void {
+    this.entries.push({
+      embedding,
+      question,
+      answer,
+      provider,
+      confidence,
+      hits: 0,
+    });
+
+    if (this.entries.length > this.maxEntries) {
+      this.entries.shift();
+    }
+  }
+
+  stats(): { size: number; totalHits: number } {
+    return {
+      size: this.entries.length,
+      totalHits: this.entries.reduce((sum, e) => sum + e.hits, 0),
+    };
+  }
+}

@@ -1,20 +1,22 @@
 import { createApp, type Application } from "@ai-chat-platform/bootstrap";
 
-let appPromise: Promise<Application> | null = null;
+// A plain module-level variable isn't reliably shared across every
+// route.ts in Next.js dev (Turbopack can give different routes separate
+// module instances) — same reason packages/database/src/client.ts stashes
+// the Prisma client on globalThis instead of a module variable. Without
+// this, /api/chat and /api/admin/handoffs/messages could each build their
+// own Container with their own empty ConversationService.
+const globalForApp = globalThis as unknown as {
+  appPromise?: Promise<Application>;
+};
 
-/**
- * Next.js route handlers are stateless functions, but this module stays
- * resident for the life of the server process, so the composed app (and
- * its in-memory conversation/session state) is built once and reused
- * across requests instead of being rebuilt per request.
- */
 export function getApp(): Promise<Application> {
-  if (!appPromise) {
-    appPromise = createApp().then((app) => {
+  if (!globalForApp.appPromise) {
+    globalForApp.appPromise = createApp().then((app) => {
       app.start();
       return app;
     });
   }
 
-  return appPromise;
+  return globalForApp.appPromise;
 }

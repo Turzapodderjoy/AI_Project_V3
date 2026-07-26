@@ -70,4 +70,28 @@ export class ConversationService {
       sessionId
     );
   }
+
+  listHandoffs(): Session[] {
+    return [...this.sessions.values()].filter(
+      (session) => session.handoffStatus !== "bot"
+    );
+  }
+
+  sendAgentMessage(sessionId: string, message: string): Session {
+    const session = this.sessions.get(sessionId);
+
+    if (!session) {
+      throw new Error("Session not found");
+    }
+
+    session.memory.add({
+      role: "agent",
+      content: message,
+      createdAt: new Date(),
+    });
+
+    session.handoffStatus = "human";
+
+    return session;
+  }
 }

@@ -17,10 +17,11 @@ export class VectorStoreRetriever implements Retriever {
     query: string,
     options: RetrieveOptions = {}
   ): Promise<RetrievedChunk[]> {
-    const embedded = await this.embeddings.embed(query);
+    const embedding =
+      options.embedding ?? (await this.embeddings.embed(query)).embedding;
 
     const results = await this.vectorStore.search(
-      embedded.embedding,
+      embedding,
       options.limit ?? 5
     );
 

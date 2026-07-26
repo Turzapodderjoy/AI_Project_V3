@@ -124,6 +124,9 @@ importers:
       '@ai-chat-platform/chat-service':
         specifier: workspace:*
         version: link:../chat-service
+      '@ai-chat-platform/conversation':
+        specifier: workspace:*
+        version: link:../conversation
       '@ai-chat-platform/database':
         specifier: workspace:*
         version: link:../database
@@ -224,6 +227,9 @@ importers:
       '@ai-chat-platform/conversation':
         specifier: workspace:*
         version: link:../conversation
+      '@ai-chat-platform/embedding-manager':
+        specifier: workspace:*
+        version: link:../embedding-manager
       '@ai-chat-platform/prompt-engine':
         specifier: workspace:*
         version: link:../prompt-engine

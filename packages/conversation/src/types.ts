@@ -1,5 +1,5 @@
 export interface ConversationMessage {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "agent";
 
   content: string;
 

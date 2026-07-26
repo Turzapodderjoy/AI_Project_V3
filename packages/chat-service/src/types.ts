@@ -9,4 +9,6 @@ export interface ChatResponse {
   provider: string;
   tokens: number;
   confidence: number;
+  cached?: boolean;
+  handoff?: boolean;
 }
