@@ -13,6 +13,7 @@ import {
 import { HealthTracker } from "./health-tracker";
 import { KeyManager } from "./key-manager";
 import { retryWithBackoff } from "./retry";
+import { UsageTracker, type ProviderUsage } from "./usage-tracker";
 
 interface AIManagerOptions {
   failoverOrder?: string[];
@@ -28,6 +29,7 @@ interface RegisteredProvider {
 export class AIManager {
   private readonly providers = new Map<string, RegisteredProvider>();
   private readonly healthTracker: HealthTracker;
+  private readonly usageTracker: UsageTracker;
   private readonly failoverOrder: string[];
   private readonly keyCooldownMs: number;
   private readonly maxRetriesPerKey: number;
@@ -38,6 +40,19 @@ export class AIManager {
     this.keyCooldownMs = options.keyCooldownMs ?? 30_000;
     this.maxRetriesPerKey = options.maxRetriesPerKey ?? 1;
     this.healthTracker = new HealthTracker();
+    this.usageTracker = new UsageTracker();
+  }
+
+  getUsage(): Record<string, ProviderUsage> {
+    return this.usageTracker.getAll();
+  }
+
+  getProviderStatus(): Array<{ name: string; healthy: boolean; hasUsableKey: boolean }> {
+    return Array.from(this.providers.values()).map((entry) => ({
+      name: entry.provider.name,
+      healthy: this.healthTracker.isAvailable(entry.provider.name),
+      hasUsableKey: entry.keyManager.hasAnyUsableKey(entry.provider.name),
+    }));
   }
 
   registerProvider(provider: AIProvider, keys: ProviderKey[]): void {
@@ -109,6 +124,8 @@ export class AIManager {
               currentKey.id
             );
 
+            this.usageTracker.recordFailure(providerName);
+
             failures.push(
               new ProviderUnavailableError(
                 `Provider ${providerName} returned an unsuccessful response.`
@@ -125,6 +142,7 @@ export class AIManager {
           );
 
           this.healthTracker.recordSuccess(providerName);
+          this.usageTracker.recordSuccess(providerName, response.tokens ?? 0);
 
           return response;
         } catch (cause) {
@@ -132,6 +150,8 @@ export class AIManager {
             cause instanceof Error
               ? cause
               : new Error(String(cause));
+
+          this.usageTracker.recordFailure(providerName);
 
           if (error instanceof InvalidApiKeyError) {
             entry.keyManager.markKeyFailed(

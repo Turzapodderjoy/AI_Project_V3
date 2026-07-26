@@ -19,5 +19,5 @@ export async function createApp(): Promise<Application> {
 
   const retriever = new VectorStoreRetriever(embeddings, vectorStore);
 
-  return new Application(new Container(retriever));
+  return new Application(new Container(retriever, vectorStore));
 }

@@ -75,6 +75,10 @@ export class JsonProvider implements VectorStore {
       .slice(0, limit);
   }
 
+  async listAll(): Promise<VectorRecord[]> {
+    return this.read();
+  }
+
   private cosineSimilarity(
     a: number[],
     b: number[]

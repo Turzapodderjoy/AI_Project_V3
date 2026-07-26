@@ -26,4 +26,8 @@ export class VectorStoreManager {
       limit
     );
   }
+
+  async listAll(): Promise<VectorRecord[]> {
+    return this.provider.listAll();
+  }
 }

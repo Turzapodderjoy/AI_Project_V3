@@ -118,12 +118,21 @@ importers:
 
   packages/api:
     dependencies:
+      '@ai-chat-platform/ai-manager':
+        specifier: workspace:*
+        version: link:../ai-manager
+      '@ai-chat-platform/database':
+        specifier: workspace:*
+        version: link:../database
       '@ai-chat-platform/rag':
         specifier: workspace:*
         version: link:../rag
       '@ai-chat-platform/upload':
         specifier: workspace:*
         version: link:../upload
+      '@ai-chat-platform/vector-store':
+        specifier: workspace:*
+        version: link:../vector-store
 
   packages/auth:
     dependencies:

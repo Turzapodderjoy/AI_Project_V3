@@ -25,4 +25,6 @@ export interface VectorStore {
     embedding: number[],
     limit?: number
   ): Promise<SearchResult[]>;
+
+  listAll(): Promise<VectorRecord[]>;
 }

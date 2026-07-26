@@ -11,6 +11,8 @@ export default function HomePage() {
         </p>
 
         <p className="mt-8">
+          <a href="/dashboard" className="underline">Admin dashboard</a>
+          {" · "}
           <a href="/upload" className="underline">Upload knowledge</a>
           {" · "}
           <a href="/chat" className="underline">Open chat demo</a>
