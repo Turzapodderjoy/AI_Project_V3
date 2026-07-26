@@ -3,7 +3,8 @@ import { PromptEngine } from "@ai-chat-platform/prompt-engine";
 import { ConversationService } from "@ai-chat-platform/conversation";
 import type { Retriever } from "@ai-chat-platform/retriever";
 import type { VectorStoreManager } from "@ai-chat-platform/vector-store";
-import { ChatService } from "@ai-chat-platform/chat-service";
+import type { EmbeddingManager } from "@ai-chat-platform/embedding-manager";
+import { ChatService, ChatUsageLog } from "@ai-chat-platform/chat-service";
 import { RagService } from "@ai-chat-platform/rag";
 import { IngestionPipeline } from "@ai-chat-platform/ingestion";
 import { IndexingService } from "@ai-chat-platform/indexing";
@@ -20,7 +21,8 @@ export class Container {
 
   constructor(
     retriever: Retriever,
-    vectorStore: VectorStoreManager
+    vectorStore: VectorStoreManager,
+    embeddings: EmbeddingManager
   ) {
 
     const conversations =
@@ -34,12 +36,16 @@ export class Container {
 
     registerProviders(ai);
 
+    const chatUsageLog =
+      new ChatUsageLog();
+
     const chat =
       new ChatService(
         conversations,
         retriever,
         prompts,
-        ai
+        ai,
+        chatUsageLog
       );
 
     const rag =
@@ -56,7 +62,7 @@ export class Container {
         new ChatController(rag),
         new UploadController(uploadService),
         new HealthController(),
-        new AdminController(ai, vectorStore)
+        new AdminController(ai, vectorStore, embeddings, chatUsageLog)
       );
   }
 

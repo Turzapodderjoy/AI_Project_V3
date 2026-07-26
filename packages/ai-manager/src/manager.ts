@@ -47,12 +47,35 @@ export class AIManager {
     return this.usageTracker.getAll();
   }
 
-  getProviderStatus(): Array<{ name: string; healthy: boolean; hasUsableKey: boolean }> {
+  getProviderStatus(): Array<{
+    name: string;
+    healthy: boolean;
+    hasUsableKey: boolean;
+    maskedKey: string | null;
+  }> {
     return Array.from(this.providers.values()).map((entry) => ({
       name: entry.provider.name,
       healthy: this.healthTracker.isAvailable(entry.provider.name),
       hasUsableKey: entry.keyManager.hasAnyUsableKey(entry.provider.name),
+      maskedKey: entry.keyManager.getMaskedKey(entry.provider.name),
     }));
+  }
+
+  hasProvider(name: string): boolean {
+    return this.providers.has(name.toLowerCase());
+  }
+
+  /** Replaces the active key(s) for an already-registered provider. */
+  setProviderKey(name: string, apiKey: string): void {
+    const entry = this.providers.get(name.toLowerCase());
+
+    if (!entry) {
+      throw new Error(`Provider ${name} is not registered.`);
+    }
+
+    entry.keyManager.registerKeys(name, [
+      { id: `${name}-ui`, value: apiKey },
+    ]);
   }
 
   registerProvider(provider: AIProvider, keys: ProviderKey[]): void {
@@ -194,7 +217,7 @@ export class AIManager {
 
   async chat(
     message: string
-  ): Promise<{ provider: string; response: string }> {
+  ): Promise<{ provider: string; response: string; tokens: number }> {
     const result = await this.generate({
       userId: "anonymous",
       sessionId: "anonymous",
@@ -204,6 +227,7 @@ export class AIManager {
     return {
       provider: result.provider,
       response: result.message,
+      tokens: result.tokens ?? 0,
     };
   }
 

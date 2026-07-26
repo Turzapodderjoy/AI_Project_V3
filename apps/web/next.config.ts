@@ -24,6 +24,7 @@ const nextConfig: NextConfig = {
     "@ai-chat-platform/retriever",
     "@ai-chat-platform/prompt-engine",
     "@ai-chat-platform/upload",
+    "@ai-chat-platform/provider-catalog",
   ],
   serverExternalPackages: ["@lancedb/lancedb"],
 };

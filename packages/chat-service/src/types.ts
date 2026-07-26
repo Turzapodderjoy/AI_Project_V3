@@ -6,4 +6,7 @@ export interface ChatRequest {
 
 export interface ChatResponse {
   answer: string;
+  provider: string;
+  tokens: number;
+  confidence: number;
 }

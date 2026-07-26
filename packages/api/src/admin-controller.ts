@@ -1,5 +1,8 @@
 import { AIManager } from "@ai-chat-platform/ai-manager";
 import { VectorStoreManager } from "@ai-chat-platform/vector-store";
+import { EmbeddingManager } from "@ai-chat-platform/embedding-manager";
+import { ChatUsageLog } from "@ai-chat-platform/chat-service";
+import { PROVIDER_CATALOG, PLANNED_PROVIDERS } from "@ai-chat-platform/provider-catalog";
 import { prisma } from "@ai-chat-platform/database";
 
 export interface KnowledgeDocumentSummary {
@@ -11,7 +14,9 @@ export interface KnowledgeDocumentSummary {
 export class AdminController {
   constructor(
     private readonly ai: AIManager,
-    private readonly vectorStore: VectorStoreManager
+    private readonly vectorStore: VectorStoreManager,
+    private readonly embeddings: EmbeddingManager,
+    private readonly chatUsageLog: ChatUsageLog
   ) {}
 
   providers() {
@@ -21,8 +26,51 @@ export class AdminController {
     };
   }
 
+  /** Every provider the dashboard can offer to activate, coded or not. */
+  catalog() {
+    return {
+      available: PROVIDER_CATALOG.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+      })),
+      planned: PLANNED_PROVIDERS,
+    };
+  }
+
+  /** Registers (or re-keys) a provider at runtime — no restart needed. */
+  activateProvider(id: string, apiKey: string): { activated: string } {
+    const entry = PROVIDER_CATALOG.find((e) => e.id === id);
+
+    if (!entry) {
+      throw new Error(
+        `No adapter implemented for "${id}" yet — add it to packages/provider-catalog first.`
+      );
+    }
+
+    if (!apiKey.trim()) {
+      throw new Error("API key is required.");
+    }
+
+    if (this.ai.hasProvider(id)) {
+      this.ai.setProviderKey(id, apiKey);
+    } else {
+      this.ai.registerProvider(entry.create(), [
+        { id: `${id}-ui`, value: apiKey },
+      ]);
+    }
+
+    return { activated: id };
+  }
+
   usage() {
-    return this.ai.getUsage();
+    return {
+      ai: this.ai.getUsage(),
+      embeddings: this.embeddings.getUsage(),
+    };
+  }
+
+  chatUsage() {
+    return this.chatUsageLog.recent();
   }
 
   async knowledge(): Promise<KnowledgeDocumentSummary[]> {

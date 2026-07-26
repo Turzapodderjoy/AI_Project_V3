@@ -5,4 +5,7 @@ export interface AskRequest {
 
 export interface AskResponse {
   answer: string;
+  provider: string;
+  tokens: number;
+  confidence: number;
 }

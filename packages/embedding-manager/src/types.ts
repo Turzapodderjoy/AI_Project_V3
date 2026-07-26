@@ -2,6 +2,7 @@ export interface EmbeddingResult {
   provider: string;
   embedding: number[];
   dimensions: number;
+  tokens?: number;
 }
 
 export interface EmbeddingProvider {

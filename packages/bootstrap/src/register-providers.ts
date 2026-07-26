@@ -1,21 +1,21 @@
 import { AIManager } from "@ai-chat-platform/ai-manager";
-import { GroqProvider } from "@ai-chat-platform/groq";
+import { PROVIDER_CATALOG } from "@ai-chat-platform/provider-catalog";
 
-export function registerProviders(
-  manager: AIManager
-) {
-  manager.registerProvider(
-    new GroqProvider(),
-    [
-      {
-        id: "groq-key-1",
-        value: process.env.GROQ_API_KEY ?? "",
-      },
+/**
+ * Auto-activates every catalog entry whose env var is set. Adding a new
+ * provider adapter never requires touching this function — add it to
+ * PROVIDER_CATALOG (packages/provider-catalog) and set its env var.
+ */
+export function registerProviders(manager: AIManager): void {
+  for (const entry of PROVIDER_CATALOG) {
+    const apiKey = process.env[entry.envKey];
 
-      // {
-      //   id: "groq-key-2",
-      //   value: process.env.GROQ_API_KEY_2 ?? "",
-      // }
-    ]
-  );
+    if (!apiKey) {
+      continue;
+    }
+
+    manager.registerProvider(entry.create(), [
+      { id: `${entry.id}-env`, value: apiKey },
+    ]);
+  }
 }

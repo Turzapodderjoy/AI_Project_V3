@@ -3,6 +3,7 @@ import { PromptEngine } from "@ai-chat-platform/prompt-engine";
 import { Retriever } from "@ai-chat-platform/retriever";
 import { ConversationService } from "@ai-chat-platform/conversation";
 
+import { ChatUsageLog } from "./chat-usage-log";
 import type {
   ChatRequest,
   ChatResponse,
@@ -13,7 +14,8 @@ export class ChatService {
     private readonly conversations: ConversationService,
     private readonly retriever: Retriever,
     private readonly prompts: PromptEngine,
-    private readonly ai: AIManager
+    private readonly ai: AIManager,
+    private readonly usageLog: ChatUsageLog
   ) {}
 
   async chat(
@@ -38,6 +40,10 @@ export class ChatService {
         request.message
       );
 
+    // Top retrieval score doubles as a rough "grounding confidence" for
+    // this answer — how well the knowledge base actually backs it.
+    const confidence = retrieved[0]?.score ?? 0;
+
     const prompt =
       this.prompts.build({
         systemPrompt:
@@ -59,8 +65,19 @@ export class ChatService {
       createdAt: new Date(),
     });
 
+    this.usageLog.record({
+      chatId: request.sessionId,
+      provider: aiResponse.provider,
+      tokens: aiResponse.tokens,
+      confidence,
+      createdAt: new Date().toISOString(),
+    });
+
     return {
       answer: aiResponse.response,
+      provider: aiResponse.provider,
+      tokens: aiResponse.tokens,
+      confidence,
     };
   }
 }

@@ -23,6 +23,9 @@ export class RagService {
 
     return {
       answer: response.answer,
+      provider: response.provider,
+      tokens: response.tokens,
+      confidence: response.confidence,
     };
   }
 }

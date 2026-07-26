@@ -11,6 +11,9 @@
     "@ai-chat-platform/upload": "workspace:*",
     "@ai-chat-platform/ai-manager": "workspace:*",
     "@ai-chat-platform/vector-store": "workspace:*",
-    "@ai-chat-platform/database": "workspace:*"
+    "@ai-chat-platform/database": "workspace:*",
+    "@ai-chat-platform/embedding-manager": "workspace:*",
+    "@ai-chat-platform/chat-service": "workspace:*",
+    "@ai-chat-platform/provider-catalog": "workspace:*"
   }
 }

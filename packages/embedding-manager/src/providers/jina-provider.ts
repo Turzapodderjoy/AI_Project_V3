@@ -9,6 +9,7 @@ interface JinaEmbeddingItem {
 
 interface JinaEmbeddingResponse {
   data: JinaEmbeddingItem[];
+  usage?: { total_tokens?: number };
 }
 
 export class JinaProvider implements EmbeddingProvider {
@@ -66,6 +67,7 @@ export class JinaProvider implements EmbeddingProvider {
       provider: this.name,
       embedding: item.embedding,
       dimensions: item.embedding.length,
+      tokens: json.usage?.total_tokens ?? 0,
     };
   }
 
@@ -100,10 +102,15 @@ export class JinaProvider implements EmbeddingProvider {
       throw new Error("Jina returned no embeddings.");
     }
 
+    const tokensPerItem = Math.round(
+      (json.usage?.total_tokens ?? 0) / json.data.length
+    );
+
     return json.data.map((item) => ({
       provider: this.name,
       embedding: item.embedding,
       dimensions: item.embedding.length,
+      tokens: tokensPerItem,
     }));
   }
 }

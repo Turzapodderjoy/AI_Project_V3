@@ -121,9 +121,18 @@ importers:
       '@ai-chat-platform/ai-manager':
         specifier: workspace:*
         version: link:../ai-manager
+      '@ai-chat-platform/chat-service':
+        specifier: workspace:*
+        version: link:../chat-service
       '@ai-chat-platform/database':
         specifier: workspace:*
         version: link:../database
+      '@ai-chat-platform/embedding-manager':
+        specifier: workspace:*
+        version: link:../embedding-manager
+      '@ai-chat-platform/provider-catalog':
+        specifier: workspace:*
+        version: link:../provider-catalog
       '@ai-chat-platform/rag':
         specifier: workspace:*
         version: link:../rag
@@ -179,6 +188,9 @@ importers:
       '@ai-chat-platform/prompt-engine':
         specifier: workspace:*
         version: link:../prompt-engine
+      '@ai-chat-platform/provider-catalog':
+        specifier: workspace:*
+        version: link:../provider-catalog
       '@ai-chat-platform/rag':
         specifier: workspace:*
         version: link:../rag
@@ -335,6 +347,15 @@ importers:
       '@ai-chat-platform/knowledge-base':
         specifier: workspace:*
         version: link:../knowledge-base
+
+  packages/provider-catalog:
+    dependencies:
+      '@ai-chat-platform/groq':
+        specifier: workspace:*
+        version: link:../groq
+      '@ai-chat-platform/types':
+        specifier: workspace:*
+        version: link:../types
 
   packages/provider-orchestrator:
     dependencies:

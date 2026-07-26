@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  provider?: string;
+  tokens?: number;
+  confidence?: number;
 }
 
 function getSessionId(): string {
@@ -48,10 +51,15 @@ export function ChatWidget() {
 
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: res.ok ? data.answer : `Error: ${data.detail ?? data.error}`,
-        },
+        res.ok
+          ? {
+              role: "assistant",
+              content: data.answer,
+              provider: data.provider,
+              tokens: data.tokens,
+              confidence: data.confidence,
+            }
+          : { role: "assistant", content: `Error: ${data.detail ?? data.error}` },
       ]);
     } catch (err) {
       setMessages((prev) => [
@@ -65,6 +73,8 @@ export function ChatWidget() {
 
   return (
     <div>
+      <p style={{ opacity: 0.5, fontSize: 12 }}>Chat ID: {sessionId}</p>
+
       <div
         style={{
           border: "1px solid #333",
@@ -84,8 +94,16 @@ export function ChatWidget() {
 
         {messages.map((m, i) => (
           <div key={i}>
-            <strong>{m.role === "user" ? "You" : "Assistant"}:</strong>{" "}
-            {m.content}
+            <div>
+              <strong>{m.role === "user" ? "You" : "Assistant"}:</strong>{" "}
+              {m.content}
+            </div>
+            {m.role === "assistant" && m.provider && (
+              <div style={{ fontSize: 11, opacity: 0.5 }}>
+                {m.provider} · {Math.round((m.confidence ?? 0) * 100)}% confidence ·{" "}
+                {m.tokens} tokens
+              </div>
+            )}
           </div>
         ))}
 

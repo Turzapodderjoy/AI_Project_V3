@@ -19,15 +19,45 @@ interface ProviderStatus {
   name: string;
   healthy: boolean;
   hasUsableKey: boolean;
+  maskedKey: string | null;
 }
 
-interface UsageStats {
+interface CatalogEntry {
+  id: string;
+  label: string;
+}
+
+interface ProvidersResponse {
+  active: string[];
+  status: ProviderStatus[];
+  catalog: {
+    available: CatalogEntry[];
+    planned: CatalogEntry[];
+  };
+}
+
+interface AiUsage {
   [provider: string]: {
     requests: number;
     successes: number;
     failures: number;
     tokens: number;
   };
+}
+
+interface EmbeddingUsage {
+  [provider: string]: {
+    requests: number;
+    tokens: number;
+  };
+}
+
+interface ChatUsageEntry {
+  chatId: string;
+  provider: string;
+  tokens: number;
+  confidence: number;
+  createdAt: string;
 }
 
 interface KnowledgeDocument {
@@ -81,64 +111,154 @@ export default function DashboardPage() {
 }
 
 function AiProvidersPanel() {
-  const [status, setStatus] = useState<ProviderStatus[] | null>(null);
+  const [data, setData] = useState<ProvidersResponse | null>(null);
+  const [selected, setSelected] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
+  function refresh() {
     fetch("/api/admin/providers")
       .then((r) => r.json())
-      .then((data) => setStatus(data.status));
-  }, []);
+      .then(setData);
+  }
+
+  useEffect(refresh, []);
+
+  useEffect(() => {
+    const first = data?.catalog.available[0];
+    if (first && !selected) {
+      setSelected(first.id);
+    }
+  }, [data, selected]);
+
+  async function activate() {
+    if (!selected || !apiKey.trim()) return;
+    setSaving(true);
+    setMessage("");
+
+    try {
+      const res = await fetch("/api/admin/providers/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selected, apiKey }),
+      });
+      const result = await res.json();
+
+      setMessage(
+        res.ok
+          ? `Activated "${result.activated}". In-memory only for now — resets on restart until keys move to persisted config.`
+          : `Error: ${result.error}`
+      );
+
+      if (res.ok) {
+        setApiKey("");
+        refresh();
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <section>
       <h2>AI Providers</h2>
-      <p style={{ opacity: 0.6 }}>
-        Only providers registered in <code>bootstrap/register-providers.ts</code>{" "}
-        show up here. Add Gemini, Claude, OpenAI, OpenRouter, Ollama, or
-        Together by registering them there once you have their API keys — no
-        other code changes needed.
-      </p>
 
-      {!status && <p>Loading…</p>}
+      {!data && <p>Loading…</p>}
 
-      {status && (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={cellStyle}>Provider</th>
-              <th style={cellStyle}>Healthy</th>
-              <th style={cellStyle}>Has API key</th>
-            </tr>
-          </thead>
-          <tbody>
-            {status.map((p) => (
-              <tr key={p.name}>
-                <td style={cellStyle}>{p.name}</td>
-                <td style={cellStyle}>{p.healthy ? "✅" : "❌"}</td>
-                <td style={cellStyle}>{p.hasUsableKey ? "✅" : "❌"}</td>
-              </tr>
-            ))}
-            {status.length === 0 && (
+      {data && (
+        <>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
               <tr>
-                <td style={cellStyle} colSpan={3}>
-                  No providers registered.
-                </td>
+                <th style={cellStyle}>Provider</th>
+                <th style={cellStyle}>Healthy</th>
+                <th style={cellStyle}>Has API key</th>
+                <th style={cellStyle}>API key</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {data.status.map((p) => (
+                <tr key={p.name}>
+                  <td style={cellStyle}>{p.name}</td>
+                  <td style={cellStyle}>{p.healthy ? "✅" : "❌"}</td>
+                  <td style={cellStyle}>{p.hasUsableKey ? "✅" : "❌"}</td>
+                  <td style={cellStyle}>
+                    <code style={{ fontSize: 12 }}>{p.maskedKey ?? "—"}</code>
+                  </td>
+                </tr>
+              ))}
+              {data.status.length === 0 && (
+                <tr>
+                  <td style={cellStyle} colSpan={4}>
+                    No providers active yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          <h3 style={{ marginTop: 24 }}>Add / activate a provider</h3>
+          <p style={{ opacity: 0.6 }}>
+            Only providers with a real, coded adapter can be activated —
+            picking one just needs an API key, no redeploy or code change.
+            Planned but not-yet-coded providers are listed below for
+            visibility.
+          </p>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value={selected}
+              onChange={(e) => setSelected(e.target.value)}
+              style={{ padding: 8 }}
+            >
+              {data.catalog.available.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <input
+              style={{ padding: 8, flex: 1, minWidth: 200 }}
+              placeholder="API key"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+            <button onClick={activate} disabled={saving}>
+              {saving ? "Saving…" : "Activate"}
+            </button>
+          </div>
+
+          {message && <p style={{ fontSize: 13, opacity: 0.8 }}>{message}</p>}
+
+          <p style={{ opacity: 0.5, fontSize: 12, marginTop: 12 }}>
+            Not implemented yet: {data.catalog.planned.map((p) => p.label).join(", ")}.
+            Each needs its adapter written once (implements the same
+            AIProvider interface as Groq) before it can be activated here.
+          </p>
+        </>
       )}
     </section>
   );
 }
 
 function UsagePanel() {
-  const [usage, setUsage] = useState<UsageStats | null>(null);
+  const [aiUsage, setAiUsage] = useState<AiUsage | null>(null);
+  const [embeddingUsage, setEmbeddingUsage] = useState<EmbeddingUsage | null>(null);
+  const [chats, setChats] = useState<ChatUsageEntry[] | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/usage")
       .then((r) => r.json())
-      .then(setUsage);
+      .then((data) => {
+        setAiUsage(data.ai);
+        setEmbeddingUsage(data.embeddings);
+      });
+
+    fetch("/api/admin/chat-usage")
+      .then((r) => r.json())
+      .then((data) => setChats(data.chats));
   }, []);
 
   return (
@@ -152,9 +272,45 @@ function UsagePanel() {
         table (Postgres), same fix as conversation history below.
       </p>
 
-      {!usage && <p>Loading…</p>}
+      <h3>By chat</h3>
+      {!chats && <p>Loading…</p>}
+      {chats && (
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={cellStyle}>Chat ID</th>
+              <th style={cellStyle}>Provider</th>
+              <th style={cellStyle}>Confidence</th>
+              <th style={cellStyle}>Tokens</th>
+              <th style={cellStyle}>When</th>
+            </tr>
+          </thead>
+          <tbody>
+            {chats.map((c, i) => (
+              <tr key={i}>
+                <td style={cellStyle}>
+                  <code style={{ fontSize: 11 }}>{c.chatId}</code>
+                </td>
+                <td style={cellStyle}>{c.provider}</td>
+                <td style={cellStyle}>{Math.round(c.confidence * 100)}%</td>
+                <td style={cellStyle}>{c.tokens}</td>
+                <td style={cellStyle}>{new Date(c.createdAt).toLocaleTimeString()}</td>
+              </tr>
+            ))}
+            {chats.length === 0 && (
+              <tr>
+                <td style={cellStyle} colSpan={5}>
+                  No chats yet — try the Chat Demo tab.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      )}
 
-      {usage && (
+      <h3 style={{ marginTop: 24 }}>AI providers (totals)</h3>
+      {!aiUsage && <p>Loading…</p>}
+      {aiUsage && (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
@@ -166,7 +322,7 @@ function UsagePanel() {
             </tr>
           </thead>
           <tbody>
-            {Object.entries(usage).map(([name, stats]) => (
+            {Object.entries(aiUsage).map(([name, stats]) => (
               <tr key={name}>
                 <td style={cellStyle}>{name}</td>
                 <td style={cellStyle}>{stats.requests}</td>
@@ -175,10 +331,41 @@ function UsagePanel() {
                 <td style={cellStyle}>{stats.tokens}</td>
               </tr>
             ))}
-            {Object.keys(usage).length === 0 && (
+            {Object.keys(aiUsage).length === 0 && (
               <tr>
                 <td style={cellStyle} colSpan={5}>
-                  No requests yet — try the Chat Demo tab.
+                  No AI requests yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      )}
+
+      <h3 style={{ marginTop: 24 }}>Embeddings (Jina, etc.)</h3>
+      {!embeddingUsage && <p>Loading…</p>}
+      {embeddingUsage && (
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={cellStyle}>Provider</th>
+              <th style={cellStyle}>Requests</th>
+              <th style={cellStyle}>Tokens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(embeddingUsage).map(([name, stats]) => (
+              <tr key={name}>
+                <td style={cellStyle}>{name}</td>
+                <td style={cellStyle}>{stats.requests}</td>
+                <td style={cellStyle}>{stats.tokens}</td>
+              </tr>
+            ))}
+            {Object.keys(embeddingUsage).length === 0 && (
+              <tr>
+                <td style={cellStyle} colSpan={3}>
+                  No embedding calls yet — upload a document or ask a
+                  question (retrieval embeds the query too).
                 </td>
               </tr>
             )}

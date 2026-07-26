@@ -3,11 +3,28 @@ import type {
   EmbeddingResult,
 } from "./types";
 
+export interface EmbeddingUsage {
+  requests: number;
+  tokens: number;
+}
+
 export class EmbeddingManager {
   private providers = new Map<string, EmbeddingProvider>();
+  private usage = new Map<string, EmbeddingUsage>();
 
   register(provider: EmbeddingProvider): void {
     this.providers.set(provider.name, provider);
+  }
+
+  getUsage(): Record<string, EmbeddingUsage> {
+    return Object.fromEntries(this.usage);
+  }
+
+  private recordUsage(providerName: string, tokens: number): void {
+    const stats = this.usage.get(providerName) ?? { requests: 0, tokens: 0 };
+    stats.requests += 1;
+    stats.tokens += tokens;
+    this.usage.set(providerName, stats);
   }
 
   getProvider(name?: string): EmbeddingProvider {
@@ -28,7 +45,10 @@ export class EmbeddingManager {
   }
 
   async embed(text: string): Promise<EmbeddingResult> {
-    return this.getProvider().embed(text);
+    const provider = this.getProvider();
+    const result = await provider.embed(text);
+    this.recordUsage(provider.name, result.tokens ?? 0);
+    return result;
   }
 
   async embedMany(
@@ -36,12 +56,13 @@ export class EmbeddingManager {
   ): Promise<EmbeddingResult[]> {
     const provider = this.getProvider();
 
-    if (!provider.embedMany) {
-      return Promise.all(
-        texts.map((text) => provider.embed(text))
-      );
-    }
+    const results = provider.embedMany
+      ? await provider.embedMany(texts)
+      : await Promise.all(texts.map((text) => provider.embed(text)));
 
-    return provider.embedMany(texts);
+    const tokens = results.reduce((sum, r) => sum + (r.tokens ?? 0), 0);
+    this.recordUsage(provider.name, tokens);
+
+    return results;
   }
 }
