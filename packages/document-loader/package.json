@@ -1,0 +1,13 @@
+{
+  "name": "@ai-chat-platform/document-loader",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "mammoth": "^1.10.0",
+    "pdf-parse": "^1.1.1"
+  }
+}

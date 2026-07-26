@@ -1,0 +1,19 @@
+# Generated knowledge base
+apps/web/storage/
+
+# Uploaded files
+storage/uploads/
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+
+# Build
+dist/

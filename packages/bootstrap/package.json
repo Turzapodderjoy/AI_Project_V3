@@ -1,0 +1,24 @@
+{
+  "name": "@ai-chat-platform/bootstrap",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ai-chat-platform/api": "workspace:*",
+    "@ai-chat-platform/rag": "workspace:*",
+    "@ai-chat-platform/chat-service": "workspace:*",
+    "@ai-chat-platform/conversation": "workspace:*",
+    "@ai-chat-platform/retriever": "workspace:*",
+    "@ai-chat-platform/prompt-engine": "workspace:*",
+    "@ai-chat-platform/ai-manager": "workspace:*",
+    "@ai-chat-platform/upload": "workspace:*",
+    "@ai-chat-platform/groq": "workspace:*",
+    "@ai-chat-platform/embedding-manager": "workspace:*",
+    "@ai-chat-platform/vector-store": "workspace:*",
+    "@ai-chat-platform/ingestion": "workspace:*",
+    "@ai-chat-platform/indexing": "workspace:*"
+  }
+}
