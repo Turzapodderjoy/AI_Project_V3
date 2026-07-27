@@ -2,6 +2,8 @@ export interface ChatRequest {
   sessionId: string;
 
   message: string;
+
+  businessId?: string;
 }
 
 export interface ChatResponse {

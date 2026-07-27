@@ -102,9 +102,12 @@ export class ConversationService {
     });
   }
 
-  async listHandoffs(): Promise<ConversationRecord[]> {
+  async listHandoffs(businessId?: string): Promise<ConversationRecord[]> {
     const rows = await prisma.conversation.findMany({
-      where: { handoffStatus: { not: "BOT" } },
+      where: {
+        handoffStatus: { not: "BOT" },
+        ...(businessId ? { businessId } : {}),
+      },
       orderBy: { updatedAt: "desc" },
     });
 

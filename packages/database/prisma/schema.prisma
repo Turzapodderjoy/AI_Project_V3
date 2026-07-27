@@ -100,3 +100,18 @@ model Message {
 
   createdAt      DateTime @default(now())
 }
+
+model CrawlTarget {
+  id            String    @id @default(cuid())
+  businessId    String
+  url           String
+
+  lastCrawledAt DateTime?
+  lastPageCount Int?
+  lastChunkCount Int?
+  lastError     String?
+
+  createdAt     DateTime  @default(now())
+
+  @@unique([businessId, url])
+}

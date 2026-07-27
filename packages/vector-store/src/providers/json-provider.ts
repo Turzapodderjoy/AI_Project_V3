@@ -79,6 +79,17 @@ export class JsonProvider implements VectorStore {
     return this.read();
   }
 
+  async deleteByDocumentId(documentId: string): Promise<void> {
+    const current = await this.read();
+    const remaining = current.filter((r) => r.documentId !== documentId);
+
+    await fs.writeFile(
+      this.filePath,
+      JSON.stringify(remaining, null, 2),
+      "utf8"
+    );
+  }
+
   private cosineSimilarity(
     a: number[],
     b: number[]

@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const file = form.get("file");
+    const businessId = typeof form.get("businessId") === "string" ? (form.get("businessId") as string) : "default";
 
     if (!(file instanceof File)) {
       return NextResponse.json(
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
     await fs.writeFile(filepath, Buffer.from(bytes));
 
     const app = await getApp();
-    const result = await app.container.router.upload.uploadFile(filepath, "default-business");
+    const result = await app.container.router.upload.uploadFile(filepath, businessId);
 
     return NextResponse.json({
       file: {

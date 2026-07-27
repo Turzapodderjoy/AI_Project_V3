@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 
-export function UploadWidget({ onUploaded }: { onUploaded?: () => void }) {
+export function UploadWidget({
+  businessId = "default",
+  onUploaded,
+}: {
+  businessId?: string;
+  onUploaded?: () => void;
+}) {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -11,6 +17,7 @@ export function UploadWidget({ onUploaded }: { onUploaded?: () => void }) {
 
     const form = new FormData();
     form.append("file", file);
+    form.append("businessId", businessId);
 
     try {
       const res = await fetch("/api/upload", {

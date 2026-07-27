@@ -14,8 +14,8 @@ export class HandoffController {
     private readonly conversations: ConversationService
   ) {}
 
-  async list(): Promise<HandoffSummary[]> {
-    const conversations = await this.conversations.listHandoffs();
+  async list(businessId?: string): Promise<HandoffSummary[]> {
+    const conversations = await this.conversations.listHandoffs(businessId);
 
     return Promise.all(
       conversations.map(async (conversation) => {

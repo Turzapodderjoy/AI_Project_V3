@@ -7,11 +7,13 @@ export class ChatController {
 
   async post(
     sessionId: string,
-    message: string
+    message: string,
+    businessId?: string
   ) {
     return this.rag.ask({
       sessionId,
       message,
+      businessId,
     });
   }
 }

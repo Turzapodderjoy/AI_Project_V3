@@ -30,4 +30,8 @@ export class VectorStoreManager {
   async listAll(): Promise<VectorRecord[]> {
     return this.provider.listAll();
   }
+
+  async deleteByDocumentId(documentId: string): Promise<void> {
+    return this.provider.deleteByDocumentId(documentId);
+  }
 }

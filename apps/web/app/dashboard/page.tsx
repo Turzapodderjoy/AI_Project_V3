@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 
 import { ChatWidget } from "../../components/ChatWidget";
-import { UploadWidget } from "../../components/UploadWidget";
+import { KnowledgeHubPanel } from "../../components/KnowledgeHubPanel";
+import { HandoffsPanel } from "../../components/HandoffsPanel";
+import { cellStyle } from "../../components/dashboard-styles";
 
-type Tab = "ai" | "usage" | "knowledge" | "chat" | "handoffs" | "database";
+type Tab = "ai" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "ai", label: "AI Providers" },
   { id: "usage", label: "Usage" },
+  { id: "clients", label: "Clients" },
   { id: "knowledge", label: "Knowledge Hub" },
   { id: "chat", label: "Chat Demo" },
   { id: "handoffs", label: "Handoffs" },
@@ -61,12 +64,6 @@ interface ChatUsageEntry {
   createdAt: string;
 }
 
-interface KnowledgeDocument {
-  documentId: string;
-  filename: string;
-  chunks: number;
-}
-
 interface DatabaseStatus {
   connected: boolean;
   host: string | null;
@@ -78,18 +75,10 @@ interface CacheStats {
   totalHits: number;
 }
 
-interface HandoffSummary {
-  sessionId: string;
-  status: string;
-  reason: string | null;
-  summary: string | null;
-  requestedAt: string | null;
-  lastMessage: string;
-}
-
-interface HandoffMessage {
-  role: "system" | "user" | "assistant" | "agent";
-  content: string;
+interface Client {
+  id: string;
+  name: string;
+  slug: string;
   createdAt: string;
 }
 
@@ -98,9 +87,9 @@ export default function DashboardPage() {
 
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: 40 }}>
-      <h1>Admin Dashboard</h1>
+      <h1>Mother Dashboard</h1>
       <p style={{ opacity: 0.6, marginTop: -8 }}>
-        Single control panel — no login yet, internal use only.
+        Platform-wide view across every client — no login yet, internal use only.
       </p>
 
       <div style={{ display: "flex", gap: 8, margin: "24px 0", flexWrap: "wrap" }}>
@@ -123,13 +112,15 @@ export default function DashboardPage() {
       </div>
 
       {/* Every panel stays mounted (hidden via CSS, not unmounted) so
-          switching tabs never wipes a panel's local state — e.g. the
-          Chat Demo's message history. */}
+          switching tabs never wipes a panel's local state. */}
       <div style={{ display: tab === "ai" ? "block" : "none" }}>
         <AiProvidersPanel />
       </div>
       <div style={{ display: tab === "usage" ? "block" : "none" }}>
         <UsagePanel />
+      </div>
+      <div style={{ display: tab === "clients" ? "block" : "none" }}>
+        <ClientsPanel />
       </div>
       <div style={{ display: tab === "knowledge" ? "block" : "none" }}>
         <KnowledgeHubPanel />
@@ -144,6 +135,96 @@ export default function DashboardPage() {
         <DatabasePanel />
       </div>
     </main>
+  );
+}
+
+function ClientsPanel() {
+  const [clients, setClients] = useState<Client[] | null>(null);
+  const [name, setName] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  function refresh() {
+    fetch("/api/admin/clients")
+      .then((r) => r.json())
+      .then((data) => setClients(data.clients));
+  }
+
+  useEffect(refresh, []);
+
+  async function addClient() {
+    if (!name.trim()) return;
+    setCreating(true);
+
+    try {
+      await fetch("/api/admin/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      setName("");
+      refresh();
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <section>
+      <h2>Clients</h2>
+      <p style={{ opacity: 0.6 }}>
+        Adding a company creates its dashboard immediately — every client
+        shares the same dashboard page (/dashboard/[id]), so there&apos;s
+        nothing to deploy per client and every future update applies to all
+        of them at once.
+      </p>
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          style={{ flex: 1, padding: 8 }}
+          placeholder="Company name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") addClient();
+          }}
+        />
+        <button onClick={addClient} disabled={creating}>
+          {creating ? "Adding…" : "Add company"}
+        </button>
+      </div>
+
+      {!clients && <p>Loading…</p>}
+
+      {clients && (
+        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 16 }}>
+          <thead>
+            <tr>
+              <th style={cellStyle}>Name</th>
+              <th style={cellStyle}>Created</th>
+              <th style={cellStyle}>Dashboard</th>
+            </tr>
+          </thead>
+          <tbody>
+            {clients.map((c) => (
+              <tr key={c.id}>
+                <td style={cellStyle}>{c.name}</td>
+                <td style={cellStyle}>{new Date(c.createdAt).toLocaleDateString()}</td>
+                <td style={cellStyle}>
+                  <a href={`/dashboard/${c.id}`}>/dashboard/{c.id}</a>
+                </td>
+              </tr>
+            ))}
+            {clients.length === 0 && (
+              <tr>
+                <td style={cellStyle} colSpan={3}>
+                  No clients yet — add one above.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }
 
@@ -422,193 +503,6 @@ function UsagePanel() {
   );
 }
 
-function KnowledgeHubPanel() {
-  const [documents, setDocuments] = useState<KnowledgeDocument[] | null>(null);
-
-  function refresh() {
-    fetch("/api/admin/knowledge")
-      .then((r) => r.json())
-      .then((data) => setDocuments(data.documents));
-  }
-
-  useEffect(refresh, []);
-
-  return (
-    <section>
-      <h2>Knowledge Hub</h2>
-      <UploadWidget onUploaded={refresh} />
-
-      <h3 style={{ marginTop: 24 }}>Indexed documents</h3>
-
-      {!documents && <p>Loading…</p>}
-
-      {documents && (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={cellStyle}>Filename</th>
-              <th style={cellStyle}>Chunks</th>
-              <th style={cellStyle}>Document ID</th>
-            </tr>
-          </thead>
-          <tbody>
-            {documents.map((d) => (
-              <tr key={d.documentId}>
-                <td style={cellStyle}>{d.filename}</td>
-                <td style={cellStyle}>{d.chunks}</td>
-                <td style={cellStyle}>
-                  <code style={{ fontSize: 11 }}>{d.documentId}</code>
-                </td>
-              </tr>
-            ))}
-            {documents.length === 0 && (
-              <tr>
-                <td style={cellStyle} colSpan={3}>
-                  Nothing indexed yet — upload a file above.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
-    </section>
-  );
-}
-
-function HandoffsPanel() {
-  const [handoffs, setHandoffs] = useState<HandoffSummary[] | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<HandoffMessage[] | null>(null);
-  const [reply, setReply] = useState("");
-  const [sending, setSending] = useState(false);
-
-  function refreshList() {
-    fetch("/api/admin/handoffs")
-      .then((r) => r.json())
-      .then((data) => setHandoffs(data.handoffs));
-  }
-
-  function openChat(sessionId: string) {
-    setOpenId(sessionId);
-    fetch(`/api/admin/handoffs/messages?sessionId=${sessionId}`)
-      .then((r) => r.json())
-      .then((data) => setMessages(data.messages));
-  }
-
-  useEffect(() => {
-    refreshList();
-    const interval = setInterval(refreshList, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  async function sendReply() {
-    if (!openId || !reply.trim()) return;
-    setSending(true);
-
-    try {
-      await fetch("/api/admin/handoffs/reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: openId, message: reply }),
-      });
-      setReply("");
-      openChat(openId);
-      refreshList();
-    } finally {
-      setSending(false);
-    }
-  }
-
-  return (
-    <section>
-      <h2>Handoffs</h2>
-      <p style={{ opacity: 0.6 }}>
-        Chats the AI couldn&apos;t confidently answer land here with an
-        auto-generated summary — pick one up and reply as a human agent.
-      </p>
-
-      <div style={{ display: "flex", gap: 24 }}>
-        <div style={{ flex: 1 }}>
-          {!handoffs && <p>Loading…</p>}
-          {handoffs?.length === 0 && <p style={{ opacity: 0.6 }}>No handoffs right now.</p>}
-          {handoffs?.map((h) => (
-            <div
-              key={h.sessionId}
-              onClick={() => openChat(h.sessionId)}
-              style={{
-                border: openId === h.sessionId ? "2px solid #666" : "1px solid #333",
-                borderRadius: 6,
-                padding: 12,
-                marginBottom: 8,
-                cursor: "pointer",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <code style={{ fontSize: 11 }}>{h.sessionId}</code>
-                <span
-                  style={{
-                    fontSize: 11,
-                    padding: "2px 6px",
-                    borderRadius: 4,
-                    background: h.status === "pending" ? "#553" : "#353",
-                  }}
-                >
-                  {h.status}
-                </span>
-              </div>
-              <p style={{ fontSize: 13, margin: "6px 0" }}>{h.summary}</p>
-              <p style={{ fontSize: 12, opacity: 0.5, margin: 0 }}>
-                Last: {h.lastMessage}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ flex: 1 }}>
-          {!openId && <p style={{ opacity: 0.6 }}>Select a handoff to view the conversation.</p>}
-
-          {openId && (
-            <>
-              <div
-                style={{
-                  border: "1px solid #333",
-                  borderRadius: 8,
-                  minHeight: 200,
-                  padding: 12,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 6,
-                }}
-              >
-                {messages?.map((m, i) => (
-                  <div key={i} style={{ fontSize: 13 }}>
-                    <strong>{m.role}:</strong> {m.content}
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <input
-                  style={{ flex: 1, padding: 8 }}
-                  value={reply}
-                  onChange={(e) => setReply(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") sendReply();
-                  }}
-                  placeholder="Reply to the customer…"
-                />
-                <button onClick={sendReply} disabled={sending}>
-                  {sending ? "Sending…" : "Send"}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function DatabasePanel() {
   const [status, setStatus] = useState<DatabaseStatus | null>(null);
 
@@ -640,9 +534,3 @@ function DatabasePanel() {
     </section>
   );
 }
-
-const cellStyle: React.CSSProperties = {
-  border: "1px solid #333",
-  padding: "6px 10px",
-  textAlign: "left",
-};

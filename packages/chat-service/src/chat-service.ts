@@ -46,7 +46,7 @@ export class ChatService {
     const conversation =
       await this.conversations.getOrCreate(
         request.sessionId,
-        "default",
+        request.businessId ?? "default",
         "anonymous"
       );
 

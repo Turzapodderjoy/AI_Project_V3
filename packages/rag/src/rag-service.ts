@@ -19,6 +19,7 @@ export class RagService {
       await this.chat.chat({
         sessionId: request.sessionId,
         message: request.message,
+        businessId: request.businessId,
       });
 
     return {

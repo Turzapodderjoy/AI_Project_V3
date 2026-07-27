@@ -20,6 +20,8 @@
     "@ai-chat-platform/vector-store": "workspace:*",
     "@ai-chat-platform/ingestion": "workspace:*",
     "@ai-chat-platform/indexing": "workspace:*",
-    "@ai-chat-platform/provider-catalog": "workspace:*"
+    "@ai-chat-platform/provider-catalog": "workspace:*",
+    "@ai-chat-platform/tenant": "workspace:*",
+    "@ai-chat-platform/web-crawler": "workspace:*"
   }
 }

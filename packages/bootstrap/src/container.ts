@@ -9,11 +9,14 @@ import { RagService } from "@ai-chat-platform/rag";
 import { IngestionPipeline } from "@ai-chat-platform/ingestion";
 import { IndexingService } from "@ai-chat-platform/indexing";
 import { UploadService } from "@ai-chat-platform/upload";
+import { TenantService } from "@ai-chat-platform/tenant";
+import { CrawlerService } from "@ai-chat-platform/web-crawler";
 import { ChatController } from "@ai-chat-platform/api";
 import { UploadController } from "@ai-chat-platform/api";
 import { HealthController } from "@ai-chat-platform/api";
 import { AdminController } from "@ai-chat-platform/api";
 import { HandoffController } from "@ai-chat-platform/api";
+import { CrawlerController } from "@ai-chat-platform/api";
 import { ApiRouter } from "@ai-chat-platform/api";
 
 import { registerProviders } from "./register-providers";
@@ -68,8 +71,9 @@ export class Container {
         new ChatController(rag),
         new UploadController(uploadService),
         new HealthController(),
-        new AdminController(ai, vectorStore, embeddings, chatUsageLog, responseCache),
-        new HandoffController(conversations)
+        new AdminController(ai, vectorStore, embeddings, chatUsageLog, responseCache, new TenantService()),
+        new HandoffController(conversations),
+        new CrawlerController(new CrawlerService())
       );
   }
 

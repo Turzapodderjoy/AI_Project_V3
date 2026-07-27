@@ -139,12 +139,18 @@ importers:
       '@ai-chat-platform/rag':
         specifier: workspace:*
         version: link:../rag
+      '@ai-chat-platform/tenant':
+        specifier: workspace:*
+        version: link:../tenant
       '@ai-chat-platform/upload':
         specifier: workspace:*
         version: link:../upload
       '@ai-chat-platform/vector-store':
         specifier: workspace:*
         version: link:../vector-store
+      '@ai-chat-platform/web-crawler':
+        specifier: workspace:*
+        version: link:../web-crawler
 
   packages/auth:
     dependencies:
@@ -200,12 +206,18 @@ importers:
       '@ai-chat-platform/retriever':
         specifier: workspace:*
         version: link:../retriever
+      '@ai-chat-platform/tenant':
+        specifier: workspace:*
+        version: link:../tenant
       '@ai-chat-platform/upload':
         specifier: workspace:*
         version: link:../upload
       '@ai-chat-platform/vector-store':
         specifier: workspace:*
         version: link:../vector-store
+      '@ai-chat-platform/web-crawler':
+        specifier: workspace:*
+        version: link:../web-crawler
 
   packages/chat-engine:
     dependencies:
@@ -466,6 +478,18 @@ importers:
   packages/vector-repository: {}
 
   packages/vector-store: {}
+
+  packages/web-crawler:
+    dependencies:
+      '@ai-chat-platform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@ai-chat-platform/indexing':
+        specifier: workspace:*
+        version: link:../indexing
+      '@ai-chat-platform/vector-store':
+        specifier: workspace:*
+        version: link:../vector-store
 
 packages:
 

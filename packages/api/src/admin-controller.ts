@@ -3,6 +3,7 @@ import { VectorStoreManager } from "@ai-chat-platform/vector-store";
 import { EmbeddingManager } from "@ai-chat-platform/embedding-manager";
 import { ChatUsageLog, ResponseCache } from "@ai-chat-platform/chat-service";
 import { PROVIDER_CATALOG, PLANNED_PROVIDERS } from "@ai-chat-platform/provider-catalog";
+import { TenantService } from "@ai-chat-platform/tenant";
 import { prisma } from "@ai-chat-platform/database";
 
 export interface KnowledgeDocumentSummary {
@@ -17,7 +18,8 @@ export class AdminController {
     private readonly vectorStore: VectorStoreManager,
     private readonly embeddings: EmbeddingManager,
     private readonly chatUsageLog: ChatUsageLog,
-    private readonly responseCache: ResponseCache
+    private readonly responseCache: ResponseCache,
+    private readonly tenants: TenantService
   ) {}
 
   providers() {
@@ -75,12 +77,16 @@ export class AdminController {
     return this.chatUsageLog.recent();
   }
 
-  async knowledge(): Promise<KnowledgeDocumentSummary[]> {
+  async knowledge(businessId?: string): Promise<KnowledgeDocumentSummary[]> {
     const records = await this.vectorStore.listAll();
 
     const byDocument = new Map<string, KnowledgeDocumentSummary>();
 
     for (const record of records) {
+      if (businessId && record.metadata?.businessId !== businessId) {
+        continue;
+      }
+
       const existing = byDocument.get(record.documentId);
 
       if (existing) {
@@ -97,6 +103,21 @@ export class AdminController {
     }
 
     return [...byDocument.values()];
+  }
+
+  /** Every client, for the mother dashboard's client list. */
+  listBusinesses() {
+    return this.tenants.listAll();
+  }
+
+  /** Its dashboard exists immediately at /dashboard/{id} — one dynamic
+   * route serves every client, so nothing needs deploying per company. */
+  createClient(name: string) {
+    if (!name.trim()) {
+      throw new Error("Company name is required.");
+    }
+
+    return this.tenants.createBusiness(name);
   }
 
   async database(): Promise<{ connected: boolean; host: string | null; error?: string }> {

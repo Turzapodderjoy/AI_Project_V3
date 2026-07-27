@@ -11,19 +11,20 @@ interface Message {
   cached?: boolean;
 }
 
-function getSessionId(): string {
-  const existing = window.localStorage.getItem("chatSessionId");
+function getSessionId(businessId: string): string {
+  const key = `chatSessionId:${businessId}`;
+  const existing = window.localStorage.getItem(key);
 
   if (existing) {
     return existing;
   }
 
   const generated = crypto.randomUUID();
-  window.localStorage.setItem("chatSessionId", generated);
+  window.localStorage.setItem(key, generated);
   return generated;
 }
 
-export function ChatWidget() {
+export function ChatWidget({ businessId = "default" }: { businessId?: string }) {
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -32,8 +33,8 @@ export function ChatWidget() {
   const seenCount = useRef(0);
 
   useEffect(() => {
-    setSessionId(getSessionId());
-  }, []);
+    setSessionId(getSessionId(businessId));
+  }, [businessId]);
 
   // Once a human handoff happens, poll for the agent's replies — the
   // server can't push to the browser without a websocket, so this is
@@ -74,7 +75,7 @@ export function ChatWidget() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, message }),
+        body: JSON.stringify({ sessionId, message, businessId }),
       });
 
       const data = await res.json();

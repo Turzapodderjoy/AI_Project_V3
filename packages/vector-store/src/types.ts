@@ -27,4 +27,6 @@ export interface VectorStore {
   ): Promise<SearchResult[]>;
 
   listAll(): Promise<VectorRecord[]>;
+
+  deleteByDocumentId(documentId: string): Promise<void>;
 }

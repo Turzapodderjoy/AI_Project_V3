@@ -10,10 +10,11 @@ export async function POST(req: NextRequest) {
   }
 
   const sessionId = typeof body.sessionId === "string" ? body.sessionId : "dev-session";
+  const businessId = typeof body.businessId === "string" ? body.businessId : undefined;
 
   try {
     const app = await getApp();
-    const answer = await app.container.router.chat.post(sessionId, body.message);
+    const answer = await app.container.router.chat.post(sessionId, body.message, businessId);
     return NextResponse.json(answer);
   } catch (err) {
     return NextResponse.json(
