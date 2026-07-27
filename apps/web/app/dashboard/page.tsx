@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ChatWidget } from "../../components/ChatWidget";
 import { KnowledgeHubPanel } from "../../components/KnowledgeHubPanel";
 import { HandoffsPanel } from "../../components/HandoffsPanel";
-import { cellStyle } from "../../components/dashboard-styles";
+import { cellStyle, formatBytes } from "../../components/dashboard-styles";
 
 type Tab = "ai" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
 
@@ -140,13 +140,28 @@ export default function DashboardPage() {
 
 function ClientsPanel() {
   const [clients, setClients] = useState<Client[] | null>(null);
+  const [storageByClient, setStorageByClient] = useState<Record<string, number>>({});
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
 
   function refresh() {
     fetch("/api/admin/clients")
       .then((r) => r.json())
-      .then((data) => setClients(data.clients));
+      .then((data) => {
+        const list: Client[] = data.clients;
+        setClients(list);
+
+        // One request per client, in parallel — fine for the handful of
+        // clients an internal admin panel deals with; revisit if this
+        // ever needs to scale to hundreds at once.
+        Promise.all(
+          list.map((c) =>
+            fetch(`/api/admin/storage?businessId=${encodeURIComponent(c.id)}`)
+              .then((r) => r.json())
+              .then((info) => [c.id, info.knowledgeBytesEstimate as number] as const)
+          )
+        ).then((pairs) => setStorageByClient(Object.fromEntries(pairs)));
+      });
   }
 
   useEffect(refresh, []);
@@ -211,6 +226,7 @@ function ClientsPanel() {
             <tr>
               <th style={cellStyle}>Name</th>
               <th style={cellStyle}>Created</th>
+              <th style={cellStyle}>Storage used</th>
               <th style={cellStyle}>Dashboard</th>
               <th style={cellStyle}></th>
             </tr>
@@ -221,6 +237,9 @@ function ClientsPanel() {
                 <td style={cellStyle}>{c.name}</td>
                 <td style={cellStyle}>{new Date(c.createdAt).toLocaleDateString()}</td>
                 <td style={cellStyle}>
+                  {storageByClient[c.id] !== undefined ? formatBytes(storageByClient[c.id]!) : "…"}
+                </td>
+                <td style={cellStyle}>
                   <a href={`/dashboard/${c.id}`}>/dashboard/{c.id}</a>
                 </td>
                 <td style={cellStyle}>
@@ -230,7 +249,7 @@ function ClientsPanel() {
             ))}
             {clients.length === 0 && (
               <tr>
-                <td style={cellStyle} colSpan={4}>
+                <td style={cellStyle} colSpan={5}>
                   No clients yet — add one above.
                 </td>
               </tr>

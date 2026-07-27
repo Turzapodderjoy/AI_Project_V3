@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { cellStyle } from "./dashboard-styles";
+import { cellStyle, formatBytes } from "./dashboard-styles";
 
 interface StorageInfo {
   knowledgeChunks: number;
@@ -13,12 +13,6 @@ interface StorageInfo {
   crawlTargets: number;
   vectorStoreLocation: string;
   databaseLocation: string | null;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 /** Shared by every per-client dashboard — one component, so it stays
