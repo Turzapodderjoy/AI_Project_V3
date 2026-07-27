@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const app = await getApp();
-    const result = app.container.router.handoff.reply(body.sessionId, body.message);
+    const result = await app.container.router.handoff.reply(body.sessionId, body.message);
     return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json(

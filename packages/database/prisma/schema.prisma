@@ -67,3 +67,36 @@ model RefreshToken {
 
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+enum HandoffStatus {
+  BOT
+  PENDING
+  HUMAN
+}
+
+model Conversation {
+  id                 String        @id
+  businessId         String
+  userId             String
+
+  handoffStatus      HandoffStatus @default(BOT)
+  handoffReason      String?
+  handoffSummary     String?
+  handoffRequestedAt DateTime?
+
+  messages           Message[]
+
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String
+  content        String
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime @default(now())
+}

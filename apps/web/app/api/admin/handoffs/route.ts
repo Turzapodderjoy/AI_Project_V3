@@ -4,5 +4,5 @@ import { getApp } from "../../../../lib/app";
 
 export async function GET() {
   const app = await getApp();
-  return NextResponse.json({ handoffs: app.container.router.handoff.list() });
+  return NextResponse.json({ handoffs: await app.container.router.handoff.list() });
 }

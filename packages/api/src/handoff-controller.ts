@@ -14,29 +14,37 @@ export class HandoffController {
     private readonly conversations: ConversationService
   ) {}
 
-  list(): HandoffSummary[] {
-    return this.conversations.listHandoffs().map((session) => ({
-      sessionId: session.id,
-      status: session.handoffStatus,
-      reason: session.handoffReason,
-      summary: session.handoffSummary,
-      requestedAt: session.handoffRequestedAt,
-      lastMessage: session.memory.history().at(-1)?.content ?? "",
-    }));
+  async list(): Promise<HandoffSummary[]> {
+    const conversations = await this.conversations.listHandoffs();
+
+    return Promise.all(
+      conversations.map(async (conversation) => {
+        const history = await this.conversations.history(conversation.id);
+
+        return {
+          sessionId: conversation.id,
+          status: conversation.handoffStatus,
+          reason: conversation.handoffReason,
+          summary: conversation.handoffSummary,
+          requestedAt: conversation.handoffRequestedAt?.toISOString() ?? null,
+          lastMessage: history.at(-1)?.content ?? "",
+        };
+      })
+    );
   }
 
-  messages(sessionId: string) {
-    const session = this.conversations.get(sessionId);
+  async messages(sessionId: string) {
+    const conversation = await this.conversations.get(sessionId);
 
-    if (!session) {
+    if (!conversation) {
       throw new Error("Session not found");
     }
 
-    return session.memory.history();
+    return this.conversations.history(sessionId, 100);
   }
 
-  reply(sessionId: string, message: string): { ok: true } {
-    this.conversations.sendAgentMessage(sessionId, message);
+  async reply(sessionId: string, message: string): Promise<{ ok: true }> {
+    await this.conversations.sendAgentMessage(sessionId, message);
     return { ok: true };
   }
 }

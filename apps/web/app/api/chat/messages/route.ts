@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const app = await getApp();
-    const messages = app.container.router.handoff.messages(sessionId);
+    const messages = await app.container.router.handoff.messages(sessionId);
     return NextResponse.json({ messages });
   } catch (err) {
     return NextResponse.json(

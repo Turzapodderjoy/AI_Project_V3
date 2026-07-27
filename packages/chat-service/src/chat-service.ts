@@ -1,7 +1,7 @@
 import { AIManager } from "@ai-chat-platform/ai-manager";
 import { PromptEngine } from "@ai-chat-platform/prompt-engine";
 import { Retriever } from "@ai-chat-platform/retriever";
-import { ConversationService, Session } from "@ai-chat-platform/conversation";
+import { ConversationService, ConversationMessage } from "@ai-chat-platform/conversation";
 import { EmbeddingManager } from "@ai-chat-platform/embedding-manager";
 
 import { ChatUsageLog } from "./chat-usage-log";
@@ -43,21 +43,21 @@ export class ChatService {
     request: ChatRequest
   ): Promise<ChatResponse> {
 
-    const session =
-      this.conversations.getOrCreate(
+    const conversation =
+      await this.conversations.getOrCreate(
         request.sessionId,
         "default",
         "anonymous"
       );
 
-    session.memory.add({
-      role: "user",
-      content: request.message,
-      createdAt: new Date(),
-    });
+    await this.conversations.addMessage(
+      request.sessionId,
+      "user",
+      request.message
+    );
 
     // Already being handled by a human — don't let the bot jump back in.
-    if (session.handoffStatus !== "bot") {
+    if (conversation.handoffStatus !== "bot") {
       return {
         answer: "",
         provider: "human",
@@ -73,11 +73,11 @@ export class ChatService {
     const cached = this.responseCache.find(queryEmbedding);
 
     if (cached) {
-      session.memory.add({
-        role: "assistant",
-        content: cached.answer,
-        createdAt: new Date(),
-      });
+      await this.conversations.addMessage(
+        request.sessionId,
+        "assistant",
+        cached.answer
+      );
 
       this.usageLog.record({
         chatId: request.sessionId,
@@ -107,14 +107,19 @@ export class ChatService {
     const confidence = retrieved[0]?.score ?? 0;
 
     if (confidence < HANDOFF_CONFIDENCE_THRESHOLD) {
-      const summary = await this.buildHandoffSummary(session);
-      session.requestHandoff("low_confidence", summary);
+      const history = await this.conversations.history(request.sessionId);
+      const summary = await this.buildHandoffSummary(history);
+      await this.conversations.requestHandoff(
+        request.sessionId,
+        "low_confidence",
+        summary
+      );
 
-      session.memory.add({
-        role: "assistant",
-        content: HANDOFF_MESSAGE,
-        createdAt: new Date(),
-      });
+      await this.conversations.addMessage(
+        request.sessionId,
+        "assistant",
+        HANDOFF_MESSAGE
+      );
 
       this.usageLog.record({
         chatId: request.sessionId,
@@ -148,11 +153,11 @@ export class ChatService {
         prompt.prompt
       );
 
-    session.memory.add({
-      role: "assistant",
-      content: aiResponse.response,
-      createdAt: new Date(),
-    });
+    await this.conversations.addMessage(
+      request.sessionId,
+      "assistant",
+      aiResponse.response
+    );
 
     this.usageLog.record({
       chatId: request.sessionId,
@@ -179,22 +184,21 @@ export class ChatService {
   }
 
   private async buildHandoffSummary(
-    session: Session
+    history: ConversationMessage[]
   ): Promise<string> {
-    const history = session.memory
-      .history()
+    const transcript = history
       .slice(-10)
       .map((m) => `${m.role}: ${m.content}`)
       .join("\n");
 
     try {
       const result = await this.ai.chat(
-        `Summarize this customer conversation in 2-3 sentences for a support agent taking over. Focus on what the customer wants and what's unresolved.\n\n${history}`
+        `Summarize this customer conversation in 2-3 sentences for a support agent taking over. Focus on what the customer wants and what's unresolved.\n\n${transcript}`
       );
       return result.response;
     } catch {
       // Summary is a nice-to-have; never block the handoff on it.
-      return `Conversation could not be auto-summarized. Last message: "${session.memory.history().at(-1)?.content ?? ""}"`;
+      return `Conversation could not be auto-summarized. Last message: "${history.at(-1)?.content ?? ""}"`;
     }
   }
 }

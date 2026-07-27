@@ -1,97 +1,124 @@
-import { Session } from "./session";
+import { prisma } from "@ai-chat-platform/database";
+
+import type {
+  ConversationMessage,
+  ConversationRecord,
+  HandoffStatus,
+} from "./types";
+
+type ConversationRow = {
+  id: string;
+  businessId: string;
+  userId: string;
+  handoffStatus: string;
+  handoffReason: string | null;
+  handoffSummary: string | null;
+  handoffRequestedAt: Date | null;
+};
+
+function toRecord(row: ConversationRow): ConversationRecord {
+  return {
+    id: row.id,
+    businessId: row.businessId,
+    userId: row.userId,
+    handoffStatus: row.handoffStatus.toLowerCase() as HandoffStatus,
+    handoffReason: row.handoffReason,
+    handoffSummary: row.handoffSummary,
+    handoffRequestedAt: row.handoffRequestedAt,
+  };
+}
 
 export class ConversationService {
 
-  private readonly sessions =
-    new Map<string, Session>();
-
-  create(
-    businessId: string,
-    userId: string
-  ): Session {
-
-    const session =
-      new Session(
-        crypto.randomUUID(),
-        businessId,
-        userId
-      );
-
-    this.sessions.set(
-      session.id,
-      session
-    );
-
-    return session;
-  }
-
-  get(
-    sessionId: string
-  ): Session | undefined {
-
-    return this.sessions.get(
-      sessionId
-    );
-  }
-
-  getOrCreate(
+  async getOrCreate(
     sessionId: string,
     businessId: string,
     userId: string
-  ): Session {
+  ): Promise<ConversationRecord> {
 
-    const existing =
-      this.sessions.get(sessionId);
-
-    if (existing) {
-      return existing;
-    }
-
-    const session =
-      new Session(
-        sessionId,
-        businessId,
-        userId
-      );
-
-    this.sessions.set(
-      session.id,
-      session
-    );
-
-    return session;
-  }
-
-  delete(
-    sessionId: string
-  ): void {
-
-    this.sessions.delete(
-      sessionId
-    );
-  }
-
-  listHandoffs(): Session[] {
-    return [...this.sessions.values()].filter(
-      (session) => session.handoffStatus !== "bot"
-    );
-  }
-
-  sendAgentMessage(sessionId: string, message: string): Session {
-    const session = this.sessions.get(sessionId);
-
-    if (!session) {
-      throw new Error("Session not found");
-    }
-
-    session.memory.add({
-      role: "agent",
-      content: message,
-      createdAt: new Date(),
+    const existing = await prisma.conversation.findUnique({
+      where: { id: sessionId },
     });
 
-    session.handoffStatus = "human";
+    if (existing) {
+      return toRecord(existing);
+    }
 
-    return session;
+    const created = await prisma.conversation.create({
+      data: { id: sessionId, businessId, userId },
+    });
+
+    return toRecord(created);
+  }
+
+  async get(sessionId: string): Promise<ConversationRecord | null> {
+    const row = await prisma.conversation.findUnique({
+      where: { id: sessionId },
+    });
+
+    return row ? toRecord(row) : null;
+  }
+
+  async addMessage(
+    sessionId: string,
+    role: ConversationMessage["role"],
+    content: string
+  ): Promise<void> {
+    await prisma.message.create({
+      data: { conversationId: sessionId, role, content },
+    });
+  }
+
+  async history(
+    sessionId: string,
+    limit = 50
+  ): Promise<ConversationMessage[]> {
+    const rows = await prisma.message.findMany({
+      where: { conversationId: sessionId },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+    });
+
+    return rows.map((row) => ({
+      role: row.role as ConversationMessage["role"],
+      content: row.content,
+      createdAt: row.createdAt,
+    }));
+  }
+
+  async requestHandoff(
+    sessionId: string,
+    reason: string,
+    summary: string
+  ): Promise<void> {
+    await prisma.conversation.update({
+      where: { id: sessionId },
+      data: {
+        handoffStatus: "PENDING",
+        handoffReason: reason,
+        handoffSummary: summary,
+        handoffRequestedAt: new Date(),
+      },
+    });
+  }
+
+  async listHandoffs(): Promise<ConversationRecord[]> {
+    const rows = await prisma.conversation.findMany({
+      where: { handoffStatus: { not: "BOT" } },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    return rows.map(toRecord);
+  }
+
+  async sendAgentMessage(sessionId: string, message: string): Promise<void> {
+    await prisma.message.create({
+      data: { conversationId: sessionId, role: "agent", content: message },
+    });
+
+    await prisma.conversation.update({
+      where: { id: sessionId },
+      data: { handoffStatus: "HUMAN" },
+    });
   }
 }
