@@ -21,9 +21,13 @@ export interface VectorStore {
 
   upsert(records: VectorRecord[]): Promise<void>;
 
+  /** businessId restricts the search to one client's records — omitting
+   * it searches every client sharing this store, which is almost never
+   * what a chat request wants. */
   search(
     embedding: number[],
-    limit?: number
+    limit?: number,
+    businessId?: string
   ): Promise<SearchResult[]>;
 
   listAll(): Promise<VectorRecord[]>;

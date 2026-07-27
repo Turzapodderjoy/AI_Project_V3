@@ -55,9 +55,14 @@ export class JsonProvider implements VectorStore {
 
   async search(
     embedding: number[],
-    limit = 5
+    limit = 5,
+    businessId?: string
   ): Promise<SearchResult[]> {
-    const records = await this.read();
+    const all = await this.read();
+
+    const records = businessId
+      ? all.filter((r) => r.metadata?.businessId === businessId)
+      : all;
 
     if (records.length === 0) {
       return [];

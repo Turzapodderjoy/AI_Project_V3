@@ -160,6 +160,47 @@ export class AdminController {
     return { deleted: businessId };
   }
 
+  /** Where a client's data actually lives and roughly how much of it
+   * there is — deliberately honest that this is a local JSON file today,
+   * not a real cloud object store or vector DB yet. */
+  async storageInfo(businessId: string): Promise<{
+    knowledgeChunks: number;
+    knowledgeDocuments: number;
+    knowledgeBytesEstimate: number;
+    conversations: number;
+    messages: number;
+    crawlTargets: number;
+    vectorStoreLocation: string;
+    databaseLocation: string | null;
+  }> {
+    const records = await this.vectorStore.listAll();
+    const forBusiness = records.filter((r) => r.metadata?.businessId === businessId);
+
+    const knowledgeBytesEstimate = forBusiness.reduce(
+      (sum, r) => sum + JSON.stringify(r).length,
+      0
+    );
+
+    const [conversations, messages, crawlTargets] = await Promise.all([
+      prisma.conversation.count({ where: { businessId } }),
+      prisma.message.count({ where: { conversation: { businessId } } }),
+      prisma.crawlTarget.count({ where: { businessId } }),
+    ]);
+
+    const url = process.env.DATABASE_URL;
+
+    return {
+      knowledgeChunks: forBusiness.length,
+      knowledgeDocuments: new Set(forBusiness.map((r) => r.documentId)).size,
+      knowledgeBytesEstimate,
+      conversations,
+      messages,
+      crawlTargets,
+      vectorStoreLocation: "Local JSON file (packages/vector-store) — shared across clients by businessId tag, not yet pgvector/cloud",
+      databaseLocation: url ? `PostgreSQL — ${maskConnectionString(url)}` : null,
+    };
+  }
+
   async database(): Promise<{ connected: boolean; host: string | null; error?: string }> {
     const url = process.env.DATABASE_URL;
     const host = url ? maskConnectionString(url) : null;

@@ -28,6 +28,11 @@ const HANDOFF_CONFIDENCE_THRESHOLD = 0.5;
 const HANDOFF_MESSAGE =
   "I don't have specific information about that in our knowledge base. Let me connect you with a team member who can help — they'll pick up right where this conversation left off.";
 
+// How many prior turns to feed back into the prompt. Unbounded history
+// would grow the prompt (and cost) forever; this is enough for a
+// customer-support-style back-and-forth without ballooning tokens.
+const HISTORY_TURNS = 10;
+
 export class ChatService {
   constructor(
     private readonly conversations: ConversationService,
@@ -43,11 +48,22 @@ export class ChatService {
     request: ChatRequest
   ): Promise<ChatResponse> {
 
+    const businessId = request.businessId ?? "default";
+
     const conversation =
       await this.conversations.getOrCreate(
         request.sessionId,
-        request.businessId ?? "default",
+        businessId,
         "anonymous"
+      );
+
+    // Fetched before this turn's message is recorded, so it's "everything
+    // said so far" — exactly what the prompt needs to resolve a follow-up
+    // like "the price" against whatever product was just discussed.
+    const priorHistory =
+      await this.conversations.history(
+        request.sessionId,
+        HISTORY_TURNS
       );
 
     await this.conversations.addMessage(
@@ -70,7 +86,15 @@ export class ChatService {
     const queryEmbedding =
       (await this.embeddings.embed(request.message)).embedding;
 
-    const cached = this.responseCache.find(queryEmbedding);
+    // The semantic cache only makes sense for a standalone, context-free
+    // question (classic FAQ). A short follow-up like "price" is only
+    // meaningful alongside the conversation before it, so skip the cache
+    // once there IS prior history — otherwise it could confidently return
+    // a cached answer for a completely different product.
+    const cached =
+      priorHistory.length === 0
+        ? this.responseCache.find(queryEmbedding, businessId)
+        : null;
 
     if (cached) {
       await this.conversations.addMessage(
@@ -99,7 +123,7 @@ export class ChatService {
     const retrieved =
       await this.retriever.retrieve(
         request.message,
-        { embedding: queryEmbedding }
+        { embedding: queryEmbedding, businessId }
       );
 
     // Top retrieval score doubles as a rough "grounding confidence" for
@@ -107,8 +131,11 @@ export class ChatService {
     const confidence = retrieved[0]?.score ?? 0;
 
     if (confidence < HANDOFF_CONFIDENCE_THRESHOLD) {
-      const history = await this.conversations.history(request.sessionId);
-      const summary = await this.buildHandoffSummary(history);
+      const fullHistory = [
+        ...priorHistory,
+        { role: "user" as const, content: request.message, createdAt: new Date() },
+      ];
+      const summary = await this.buildHandoffSummary(fullHistory);
       await this.conversations.requestHandoff(
         request.sessionId,
         "low_confidence",
@@ -144,6 +171,8 @@ export class ChatService {
           "You are a helpful AI assistant. Answer only from the provided knowledge base whenever possible.",
         context:
           retrieved.map(chunk => chunk.text),
+        history:
+          priorHistory.map(m => ({ role: m.role, content: m.content })),
         userMessage:
           request.message,
       });
@@ -167,13 +196,18 @@ export class ChatService {
       createdAt: new Date().toISOString(),
     });
 
-    this.responseCache.store(
-      queryEmbedding,
-      request.message,
-      aiResponse.response,
-      aiResponse.provider,
-      confidence
-    );
+    // Same reasoning as the lookup above — only cache answers to
+    // standalone first questions, not context-dependent follow-ups.
+    if (priorHistory.length === 0) {
+      this.responseCache.store(
+        queryEmbedding,
+        businessId,
+        request.message,
+        aiResponse.response,
+        aiResponse.provider,
+        confidence
+      );
+    }
 
     return {
       answer: aiResponse.response,

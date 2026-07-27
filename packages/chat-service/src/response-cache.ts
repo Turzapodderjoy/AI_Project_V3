@@ -10,14 +10,17 @@ export interface CachedAnswer {
 
 interface CacheEntry extends CachedAnswer {
   embedding: number[];
+  businessId: string;
 }
 
 /**
  * Semantic cache: a new question that means roughly the same thing as one
  * already answered (high embedding cosine similarity, not exact string
  * match — so paraphrases hit too) reuses the stored answer instead of
- * spending LLM tokens on it again. In-memory only, same caveat as the
- * other trackers: move to Postgres once conversations are persisted.
+ * spending LLM tokens on it again. Scoped per business — without that, a
+ * cached answer from one client could be served to another. In-memory
+ * only, same caveat as the other trackers: move to Postgres once
+ * conversations are persisted.
  */
 export class ResponseCache {
   private readonly entries: CacheEntry[] = [];
@@ -27,10 +30,14 @@ export class ResponseCache {
     private readonly maxEntries = 500
   ) {}
 
-  find(embedding: number[]): CachedAnswer | null {
+  find(embedding: number[], businessId: string): CachedAnswer | null {
     let best: { entry: CacheEntry; score: number } | null = null;
 
     for (const entry of this.entries) {
+      if (entry.businessId !== businessId) {
+        continue;
+      }
+
       const score = cosineSimilarity(embedding, entry.embedding);
 
       if (score >= this.threshold && (!best || score > best.score)) {
@@ -48,6 +55,7 @@ export class ResponseCache {
 
   store(
     embedding: number[],
+    businessId: string,
     question: string,
     answer: string,
     provider: string,
@@ -55,6 +63,7 @@ export class ResponseCache {
   ): void {
     this.entries.push({
       embedding,
+      businessId,
       question,
       answer,
       provider,

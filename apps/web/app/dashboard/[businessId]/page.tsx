@@ -6,13 +6,15 @@ import { useParams } from "next/navigation";
 import { ChatWidget } from "../../../components/ChatWidget";
 import { KnowledgeHubPanel } from "../../../components/KnowledgeHubPanel";
 import { HandoffsPanel } from "../../../components/HandoffsPanel";
+import { StoragePanel } from "../../../components/StoragePanel";
 
-type Tab = "knowledge" | "chat" | "handoffs";
+type Tab = "knowledge" | "chat" | "handoffs" | "storage";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "knowledge", label: "Knowledge Hub" },
   { id: "chat", label: "Chat Demo" },
   { id: "handoffs", label: "Handoffs" },
+  { id: "storage", label: "Storage" },
 ];
 
 interface Client {
@@ -78,6 +80,9 @@ export default function ClientDashboardPage() {
       </div>
       <div style={{ display: tab === "handoffs" ? "block" : "none" }}>
         <HandoffsPanel businessId={businessId} />
+      </div>
+      <div style={{ display: tab === "storage" ? "block" : "none" }}>
+        <StoragePanel businessId={businessId} />
       </div>
     </main>
   );

@@ -22,7 +22,8 @@ export class VectorStoreRetriever implements Retriever {
 
     const results = await this.vectorStore.search(
       embedding,
-      options.limit ?? 5
+      options.limit ?? 5,
+      options.businessId
     );
 
     // Cosine similarity scores are in [-1, 1], unlike the keyword
