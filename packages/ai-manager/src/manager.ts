@@ -28,6 +28,11 @@ interface RegisteredProvider {
 
 export class AIManager {
   private readonly providers = new Map<string, RegisteredProvider>();
+  /** Manually disabled providers — separate from health/key state, so an
+   * operator can force a provider off (or force-isolate a single one by
+   * disabling every other) for experimentation, independent of whether
+   * it's actually healthy or has a usable key. Enabled by default. */
+  private readonly disabledProviders = new Set<string>();
   private readonly healthTracker: HealthTracker;
   private readonly usageTracker: UsageTracker;
   private readonly failoverOrder: string[];
@@ -52,17 +57,40 @@ export class AIManager {
     healthy: boolean;
     hasUsableKey: boolean;
     maskedKey: string | null;
+    enabled: boolean;
   }> {
     return Array.from(this.providers.values()).map((entry) => ({
       name: entry.provider.name,
       healthy: this.healthTracker.isAvailable(entry.provider.name),
       hasUsableKey: entry.keyManager.hasAnyUsableKey(entry.provider.name),
       maskedKey: entry.keyManager.getMaskedKey(entry.provider.name),
+      enabled: !this.disabledProviders.has(entry.provider.name.toLowerCase()),
     }));
   }
 
   hasProvider(name: string): boolean {
     return this.providers.has(name.toLowerCase());
+  }
+
+  isProviderEnabled(name: string): boolean {
+    return !this.disabledProviders.has(name.toLowerCase());
+  }
+
+  /** Manually forces a provider on/off — takes effect on the very next
+   * generate() call, no restart. Used to isolate one provider for testing
+   * (disable the rest) or to force a specific one/set off entirely. */
+  setProviderEnabled(name: string, enabled: boolean): void {
+    const key = name.toLowerCase();
+
+    if (!this.providers.has(key)) {
+      throw new Error(`Provider ${name} is not registered.`);
+    }
+
+    if (enabled) {
+      this.disabledProviders.delete(key);
+    } else {
+      this.disabledProviders.add(key);
+    }
   }
 
   /** Replaces the active key(s) for an already-registered provider. */
@@ -110,6 +138,10 @@ export class AIManager {
     for (const entry of this.orderedProviders()) {
       const provider = entry.provider;
       const providerName = provider.name;
+
+      if (this.disabledProviders.has(providerName.toLowerCase())) {
+        continue;
+      }
 
       if (!(await this.isProviderHealthy(entry))) {
         continue;
@@ -202,6 +234,19 @@ export class AIManager {
             key = entry.keyManager.getAvailableKey(providerName);
             continue;
           }
+
+          // Same cooldown treatment as RateLimitedError above — without
+          // this, an unclassified error (a provider outage, an unusual
+          // status code, a network blip) leaves the key "available", so
+          // getAvailableKey() below returns the SAME key again and the
+          // while(key) loop spins on it forever instead of ever moving
+          // on to the next key/provider. Real bug found under load: this
+          // exact gap caused 1500+ back-to-back requests to one provider
+          // in a single chat call before it happened to escape.
+          entry.keyManager.markKeyFailed(
+            providerName,
+            currentKey.id
+          );
 
           this.healthTracker.recordFailure(providerName);
 

@@ -72,6 +72,15 @@ export class AdminController {
     return { activated: id };
   }
 
+  /** Forces a provider on/off for experimentation — independent of its
+   * actual health/key state. Disabling every provider but one forces
+   * that one to handle every request; disabling one forces the rest to
+   * pick up its traffic. Takes effect on the very next chat, no restart. */
+  setProviderEnabled(id: string, enabled: boolean): { id: string; enabled: boolean } {
+    this.ai.setProviderEnabled(id, enabled);
+    return { id, enabled };
+  }
+
   usage() {
     return {
       ai: this.ai.getUsage(),

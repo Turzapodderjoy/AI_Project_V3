@@ -10,6 +10,8 @@ const nextConfig: NextConfig = {
     "@ai-chat-platform/document-loader",
     "@ai-chat-platform/embedding-manager",
     "@ai-chat-platform/groq",
+    "@ai-chat-platform/gemini",
+    "@ai-chat-platform/openrouter",
     "@ai-chat-platform/ingestion",
     "@ai-chat-platform/knowledge-base",
     "@ai-chat-platform/types",

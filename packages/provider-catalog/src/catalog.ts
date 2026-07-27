@@ -1,4 +1,6 @@
 import { GroqProvider } from "@ai-chat-platform/groq";
+import { GeminiProvider } from "@ai-chat-platform/gemini";
+import { OpenRouterProvider } from "@ai-chat-platform/openrouter";
 
 import type { ProviderCatalogEntry } from "./types";
 
@@ -7,7 +9,10 @@ import type { ProviderCatalogEntry } from "./types";
  * provider here is the ONLY code change needed to make it available for
  * activation (env var at startup, or the dashboard's "Add provider" form
  * at runtime) — nothing in bootstrap, the API, or the dashboard hardcodes
- * provider names.
+ * provider names. Order here also doubles as the default failover order
+ * (AIManager.orderedProviders falls back to registration order when no
+ * explicit failoverOrder is configured, and registerProviders() loops
+ * over this array in order).
  */
 export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
   {
@@ -15,6 +20,18 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     label: "Groq",
     envKey: "GROQ_API_KEY",
     create: () => new GroqProvider(),
+  },
+  {
+    id: "gemini",
+    label: "Gemini",
+    envKey: "GEMINI_API_KEY",
+    create: () => new GeminiProvider(),
+  },
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    envKey: "OPENROUTER_API_KEY",
+    create: () => new OpenRouterProvider(),
   },
 ];
 
@@ -25,10 +42,8 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
  * implements AIProvider and adding one entry above.
  */
 export const PLANNED_PROVIDERS: { id: string; label: string }[] = [
-  { id: "gemini", label: "Gemini" },
   { id: "claude", label: "Claude" },
   { id: "openai", label: "OpenAI" },
-  { id: "openrouter", label: "OpenRouter" },
   { id: "ollama", label: "Ollama" },
   { id: "together", label: "Together" },
 ];

@@ -1,10 +1,10 @@
-import Groq from "groq-sdk";
+import { GoogleGenAI, ApiError } from "@google/genai";
 import { DEFAULT_MODEL } from "./models";
 import type { AIProvider, AIRequest, AIResponse } from "@ai-chat-platform/types";
 import { InvalidApiKeyError, RateLimitedError } from "@ai-chat-platform/types";
 
-export class GroqProvider implements AIProvider {
-  readonly name = "groq";
+export class GeminiProvider implements AIProvider {
+  readonly name = "gemini";
 
   async generate(request: AIRequest, apiKey?: string): Promise<AIResponse> {
     if (!apiKey) {
@@ -17,26 +17,28 @@ export class GroqProvider implements AIProvider {
     }
 
     try {
-      const client = new Groq({ apiKey });
+      const client = new GoogleGenAI({ apiKey });
 
-      const response = await client.chat.completions.create({
+      const response = await client.models.generateContent({
         model: DEFAULT_MODEL,
-        messages: [{ role: "user", content: request.message }],
-        temperature: request.temperature,
+        contents: request.message,
+        config:
+          request.temperature === undefined
+            ? undefined
+            : { temperature: request.temperature },
       });
 
       return {
         success: true,
         provider: this.name,
-        message: response.choices[0]?.message?.content ?? "",
-        tokens: response.usage?.total_tokens ?? 0,
+        message: response.text ?? "",
+        tokens: response.usageMetadata?.totalTokenCount ?? 0,
       };
     } catch (error) {
-      // Must throw the typed errors (not just return success:false) —
-      // AIManager's key-health and provider-health tracking only run in
-      // its catch block. Swallowing everything into a plain response
-      // would silently break both key rotation and failover.
-      const status = (error as { status?: number })?.status;
+      // Same reasoning as GroqProvider: must throw the typed errors so
+      // AIManager's key-health/failover logic (which only runs in its
+      // catch block) actually fires instead of being silently bypassed.
+      const status = error instanceof ApiError ? error.status : undefined;
       const message = error instanceof Error ? error.message : String(error);
 
       if (status === 401 || status === 403) {

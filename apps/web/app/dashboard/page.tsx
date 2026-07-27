@@ -26,6 +26,7 @@ interface ProviderStatus {
   healthy: boolean;
   hasUsableKey: boolean;
   maskedKey: string | null;
+  enabled: boolean;
 }
 
 interface CatalogEntry {
@@ -272,6 +273,7 @@ function AiProvidersPanel() {
   const [apiKey, setApiKey] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
 
   function refresh() {
     fetch("/api/admin/providers")
@@ -280,6 +282,27 @@ function AiProvidersPanel() {
   }
 
   useEffect(refresh, []);
+
+  async function toggle(name: string, enabled: boolean) {
+    setToggling(name);
+
+    try {
+      const res = await fetch("/api/admin/providers/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: name, enabled }),
+      });
+
+      if (res.ok) {
+        refresh();
+      } else {
+        const result = await res.json();
+        setMessage(`Error: ${result.error}`);
+      }
+    } finally {
+      setToggling(null);
+    }
+  }
 
   useEffect(() => {
     const first = data?.catalog.available[0];
@@ -319,6 +342,12 @@ function AiProvidersPanel() {
   return (
     <section>
       <h2>AI Providers</h2>
+      <p style={{ opacity: 0.6 }}>
+        Turn a provider on/off to experiment — disable the others to force
+        every chat through one specific provider, or disable one to see
+        the rest pick up its traffic. Takes effect on the very next chat
+        message, no restart.
+      </p>
 
       {!data && <p>Loading…</p>}
 
@@ -328,25 +357,36 @@ function AiProvidersPanel() {
             <thead>
               <tr>
                 <th style={cellStyle}>Provider</th>
+                <th style={cellStyle}>Enabled</th>
                 <th style={cellStyle}>Healthy</th>
                 <th style={cellStyle}>Has API key</th>
                 <th style={cellStyle}>API key</th>
+                <th style={cellStyle}></th>
               </tr>
             </thead>
             <tbody>
               {data.status.map((p) => (
                 <tr key={p.name}>
                   <td style={cellStyle}>{p.name}</td>
+                  <td style={cellStyle}>{p.enabled ? "🟢 On" : "⚪ Off"}</td>
                   <td style={cellStyle}>{p.healthy ? "✅" : "❌"}</td>
                   <td style={cellStyle}>{p.hasUsableKey ? "✅" : "❌"}</td>
                   <td style={cellStyle}>
                     <code style={{ fontSize: 12 }}>{p.maskedKey ?? "—"}</code>
                   </td>
+                  <td style={cellStyle}>
+                    <button
+                      onClick={() => toggle(p.name, !p.enabled)}
+                      disabled={toggling === p.name}
+                    >
+                      {toggling === p.name ? "…" : p.enabled ? "Turn off" : "Turn on"}
+                    </button>
+                  </td>
                 </tr>
               ))}
               {data.status.length === 0 && (
                 <tr>
-                  <td style={cellStyle} colSpan={4}>
+                  <td style={cellStyle} colSpan={6}>
                     No providers active yet.
                   </td>
                 </tr>

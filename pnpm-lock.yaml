@@ -340,6 +340,15 @@ importers:
         specifier: ^8.50.0
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.2)
 
+  packages/gemini:
+    dependencies:
+      '@ai-chat-platform/types':
+        specifier: workspace:^
+        version: link:../types
+      '@google/genai':
+        specifier: ^2.12.0
+        version: 2.13.0
+
   packages/groq:
     dependencies:
       '@ai-chat-platform/provider-orchestrator':
@@ -375,6 +384,12 @@ importers:
 
   packages/knowledge-base: {}
 
+  packages/openrouter:
+    dependencies:
+      '@ai-chat-platform/types':
+        specifier: workspace:^
+        version: link:../types
+
   packages/prompt-engine:
     dependencies:
       '@ai-chat-platform/knowledge-base':
@@ -383,9 +398,15 @@ importers:
 
   packages/provider-catalog:
     dependencies:
+      '@ai-chat-platform/gemini':
+        specifier: workspace:*
+        version: link:../gemini
       '@ai-chat-platform/groq':
         specifier: workspace:*
         version: link:../groq
+      '@ai-chat-platform/openrouter':
+        specifier: workspace:*
+        version: link:../openrouter
       '@ai-chat-platform/types':
         specifier: workspace:*
         version: link:../types
