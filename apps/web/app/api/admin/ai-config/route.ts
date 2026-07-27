@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getApp } from "../../../../lib/app";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const businessId = req.nextUrl.searchParams.get("businessId") ?? undefined;
   const app = await getApp();
-  return NextResponse.json(await app.container.router.aiConfig.current());
+  return NextResponse.json(await app.container.router.aiConfig.current(businessId));
 }
 
 export async function POST(req: NextRequest) {
@@ -14,10 +15,11 @@ export async function POST(req: NextRequest) {
     !body ||
     typeof body.systemPrompt !== "string" ||
     typeof body.handoffFloor !== "number" ||
-    typeof body.historyTurns !== "number"
+    typeof body.historyTurns !== "number" ||
+    typeof body.temperature !== "number"
   ) {
     return NextResponse.json(
-      { error: "systemPrompt, handoffFloor, and historyTurns are required" },
+      { error: "systemPrompt, handoffFloor, historyTurns, and temperature are required" },
       { status: 400 }
     );
   }
@@ -28,7 +30,9 @@ export async function POST(req: NextRequest) {
       body.systemPrompt,
       body.handoffFloor,
       body.historyTurns,
-      typeof body.note === "string" ? body.note : undefined
+      body.temperature,
+      typeof body.note === "string" ? body.note : undefined,
+      typeof body.businessId === "string" ? body.businessId : undefined
     );
     return NextResponse.json(result);
   } catch (err) {

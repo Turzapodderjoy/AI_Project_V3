@@ -122,19 +122,27 @@ model CrawlTarget {
 
 // Every save (full update or incremental append) inserts a new row —
 // never mutates an old one. That makes the table both "current config"
-// (latest row) and "full history" (every row) at the same time, with
-// no separate audit-log table to keep in sync.
+// (latest row per businessId) and "full history" (every row) at the
+// same time, with no separate audit-log table to keep in sync.
+//
+// businessId "__platform__" is the mother dashboard's default. A client
+// with no rows of their own inherits whatever the latest "__platform__"
+// row says; the moment they save their own change, they get their own
+// row and are independent of the platform default from then on.
 model AiConfigVersion {
   id           String   @id @default(cuid())
+
+  businessId   String   @default("__platform__")
 
   systemPrompt String
   handoffFloor Float
   historyTurns Int
+  temperature  Float    @default(0.1)
 
   changeType   String   // "seed" | "update" | "append"
   note         String?
 
   createdAt    DateTime @default(now())
 
-  @@index([createdAt])
+  @@index([businessId, createdAt])
 }

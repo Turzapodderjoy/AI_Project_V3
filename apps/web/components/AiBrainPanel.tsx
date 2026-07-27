@@ -6,17 +6,28 @@ import { cellStyle } from "./dashboard-styles";
 
 interface AiConfig {
   id: string;
+  businessId: string;
   systemPrompt: string;
   handoffFloor: number;
   historyTurns: number;
+  temperature: number;
   changeType: string;
   note: string | null;
   createdAt: string;
 }
 
-/** Platform-wide — one "AI brain" shared by every client, editable here
- * instead of hardcoded, with every change kept as a permanent version. */
-export function AiBrainPanel() {
+interface AiBrainPanelProps {
+  /** Omit for the mother dashboard's platform-wide default. A client
+   * with no saved config of its own inherits that default until it
+   * saves its own change here, at which point it gets its own history
+   * independent of the platform and every other client. */
+  businessId?: string;
+}
+
+/** The system prompt and the knobs that control how eagerly the AI hands
+ * off vs. tries to answer, and how creative it is — editable here instead
+ * of hardcoded, with every change kept as a permanent version. */
+export function AiBrainPanel({ businessId }: AiBrainPanelProps) {
   const [current, setCurrent] = useState<AiConfig | null>(null);
   const [history, setHistory] = useState<AiConfig[] | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -24,6 +35,7 @@ export function AiBrainPanel() {
   const [promptDraft, setPromptDraft] = useState("");
   const [floorDraft, setFloorDraft] = useState(0.2);
   const [turnsDraft, setTurnsDraft] = useState(10);
+  const [temperatureDraft, setTemperatureDraft] = useState(0.1);
   const [updateNote, setUpdateNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -32,22 +44,25 @@ export function AiBrainPanel() {
   const [addNote, setAddNote] = useState("");
   const [adding, setAdding] = useState(false);
 
+  const qs = businessId ? `?businessId=${encodeURIComponent(businessId)}` : "";
+
   function refresh() {
-    fetch("/api/admin/ai-config")
+    fetch(`/api/admin/ai-config${qs}`)
       .then((r) => r.json())
       .then((data: AiConfig) => {
         setCurrent(data);
         setPromptDraft(data.systemPrompt);
         setFloorDraft(data.handoffFloor);
         setTurnsDraft(data.historyTurns);
+        setTemperatureDraft(data.temperature);
       });
 
-    fetch("/api/admin/ai-config/history")
+    fetch(`/api/admin/ai-config/history${qs}`)
       .then((r) => r.json())
       .then((data) => setHistory(data.history));
   }
 
-  useEffect(refresh, []);
+  useEffect(refresh, [businessId]);
 
   async function saveUpdate() {
     setSaving(true);
@@ -61,7 +76,9 @@ export function AiBrainPanel() {
           systemPrompt: promptDraft,
           handoffFloor: floorDraft,
           historyTurns: turnsDraft,
+          temperature: temperatureDraft,
           note: updateNote,
+          businessId,
         }),
       });
       const result = await res.json();
@@ -89,7 +106,7 @@ export function AiBrainPanel() {
       const res = await fetch("/api/admin/ai-config/append", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: addText, note: addNote }),
+        body: JSON.stringify({ text: addText, note: addNote, businessId }),
       });
       const result = await res.json();
 
@@ -113,11 +130,14 @@ export function AiBrainPanel() {
     <section>
       <h2>AI Brain</h2>
       <p style={{ opacity: 0.6 }}>
-        The system prompt and the two knobs that control how eagerly the AI
-        hands off vs. tries to answer — editable here instead of hardcoded
-        in the code. Every save creates a new version; nothing is ever
-        overwritten, so the full history below is a permanent record of
-        what was asked of the AI and when.
+        The system prompt and the knobs that control how eagerly the AI
+        hands off vs. tries to answer, and how creative it is — editable
+        here instead of hardcoded in the code. Every save creates a new
+        version; nothing is ever overwritten, so the full history below is
+        a permanent record of what was asked of the AI and when.
+        {businessId
+          ? " Until you save a change here, this client uses the mother dashboard's default. The first save gives this client its own independent AI Brain."
+          : ""}
       </p>
 
       {!current && <p>Loading…</p>}
@@ -161,6 +181,26 @@ export function AiBrainPanel() {
                 style={{ width: 80, padding: 4 }}
               />
             </label>
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <label>
+              AI Temperature (Creativity){" "}
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.1}
+                value={temperatureDraft}
+                onChange={(e) => setTemperatureDraft(Number(e.target.value))}
+                style={{ verticalAlign: "middle" }}
+              />{" "}
+              <strong>{temperatureDraft.toFixed(1)}</strong>
+            </label>
+            <p style={{ opacity: 0.6, fontSize: 12, marginTop: 4 }}>
+              0.1 = Strict, Factual, Direct (Best for Customer Support) · 0.7+
+              = Creative, Chatty, Unpredictable
+            </p>
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
@@ -215,6 +255,7 @@ export function AiBrainPanel() {
               <th style={cellStyle}>Note</th>
               <th style={cellStyle}>Floor</th>
               <th style={cellStyle}>Turns</th>
+              <th style={cellStyle}>Temp</th>
               <th style={cellStyle}></th>
             </tr>
           </thead>
@@ -227,6 +268,7 @@ export function AiBrainPanel() {
                   <td style={cellStyle}>{v.note ?? "—"}</td>
                   <td style={cellStyle}>{v.handoffFloor}</td>
                   <td style={cellStyle}>{v.historyTurns}</td>
+                  <td style={cellStyle}>{v.temperature}</td>
                   <td style={cellStyle}>
                     <button onClick={() => setExpandedId(expandedId === v.id ? null : v.id)}>
                       {expandedId === v.id ? "Hide" : "View prompt"}
@@ -235,7 +277,7 @@ export function AiBrainPanel() {
                 </tr>
                 {expandedId === v.id && (
                   <tr>
-                    <td style={cellStyle} colSpan={6}>
+                    <td style={cellStyle} colSpan={7}>
                       <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0 }}>
                         {v.systemPrompt}
                       </pre>
@@ -246,7 +288,7 @@ export function AiBrainPanel() {
             ))}
             {history.length === 0 && (
               <tr>
-                <td style={cellStyle} colSpan={6}>
+                <td style={cellStyle} colSpan={7}>
                   No history yet.
                 </td>
               </tr>

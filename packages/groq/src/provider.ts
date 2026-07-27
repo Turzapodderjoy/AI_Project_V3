@@ -21,6 +21,7 @@ export class GroqProvider implements AIProvider {
       const response = await client.chat.completions.create({
         model: DEFAULT_MODEL,
         messages: [{ role: "user", content: request.message }],
+        temperature: request.temperature,
       });
 
       return {

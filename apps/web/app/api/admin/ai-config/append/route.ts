@@ -13,7 +13,8 @@ export async function POST(req: NextRequest) {
     const app = await getApp();
     const result = await app.container.router.aiConfig.append(
       body.text,
-      typeof body.note === "string" ? body.note : undefined
+      typeof body.note === "string" ? body.note : undefined,
+      typeof body.businessId === "string" ? body.businessId : undefined
     );
     return NextResponse.json(result);
   } catch (err) {

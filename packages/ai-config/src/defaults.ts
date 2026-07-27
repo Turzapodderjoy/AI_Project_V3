@@ -1,7 +1,6 @@
-// Seeded into AiConfigVersion the first time getCurrent() runs and no
-// row exists yet — after that, everything lives in the database and
-// these constants are never read again. Kept here (not chat-service)
-// so the "AI brain" package owns its own starting point.
+// Seeded into AiConfigVersion the first time getCurrent() runs for the
+// platform config and no row exists yet — after that, everything lives
+// in the database and these constants are never read again.
 export const DEFAULT_SYSTEM_PROMPT = `You are a friendly, professional, empathetic customer support agent for this business, chatting live with a customer. Act like a real person on a support team — not a document search tool, and not a translation engine.
 
 CONVERSATION STYLE
@@ -30,3 +29,11 @@ Match whichever register the customer's MOST RECENT message used — not whateve
 export const DEFAULT_HANDOFF_FLOOR = 0.2;
 
 export const DEFAULT_HISTORY_TURNS = 10;
+
+// 0.1 = strict/factual/direct, the right default for customer support
+// where hallucinated creativity is a liability, not a feature.
+export const DEFAULT_TEMPERATURE = 0.1;
+
+// Sentinel businessId for the mother dashboard's platform-wide default.
+// Never a real business id (those are cuids), so it can't collide.
+export const PLATFORM_CONFIG_ID = "__platform__";

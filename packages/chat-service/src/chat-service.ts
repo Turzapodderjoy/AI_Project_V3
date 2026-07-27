@@ -54,7 +54,7 @@ export class ChatService {
     // Read live, every request — this is the whole point of moving it
     // out of hardcoded constants: a dashboard edit takes effect on the
     // very next message, no redeploy or restart.
-    const config = await this.aiConfig.getCurrent();
+    const config = await this.aiConfig.getCurrent(businessId);
 
     const conversation =
       await this.conversations.getOrCreate(
@@ -195,7 +195,8 @@ export class ChatService {
 
     const aiResponse =
       await this.ai.chat(
-        prompt.prompt
+        prompt.prompt,
+        config.temperature
       );
 
     await this.conversations.addMessage(

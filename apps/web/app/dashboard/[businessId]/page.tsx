@@ -7,14 +7,16 @@ import { ChatWidget } from "../../../components/ChatWidget";
 import { KnowledgeHubPanel } from "../../../components/KnowledgeHubPanel";
 import { HandoffsPanel } from "../../../components/HandoffsPanel";
 import { StoragePanel } from "../../../components/StoragePanel";
+import { AiBrainPanel } from "../../../components/AiBrainPanel";
 
-type Tab = "knowledge" | "chat" | "handoffs" | "storage";
+type Tab = "knowledge" | "chat" | "handoffs" | "storage" | "brain";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "knowledge", label: "Knowledge Hub" },
   { id: "chat", label: "Chat Demo" },
   { id: "handoffs", label: "Handoffs" },
   { id: "storage", label: "Storage" },
+  { id: "brain", label: "AI Brain" },
 ];
 
 interface Client {
@@ -83,6 +85,9 @@ export default function ClientDashboardPage() {
       </div>
       <div style={{ display: tab === "storage" ? "block" : "none" }}>
         <StoragePanel businessId={businessId} />
+      </div>
+      <div style={{ display: tab === "brain" ? "block" : "none" }}>
+        <AiBrainPanel businessId={businessId} />
       </div>
     </main>
   );
