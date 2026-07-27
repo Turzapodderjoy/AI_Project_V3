@@ -1,3 +1,5 @@
+import { createHash } from "crypto";
+
 import { prisma } from "@ai-chat-platform/database";
 import { IndexingService } from "@ai-chat-platform/indexing";
 import { VectorStoreManager, JsonProvider } from "@ai-chat-platform/vector-store";
@@ -48,6 +50,10 @@ function toSummary(row: CrawlTargetRow): CrawlTargetSummary {
   };
 }
 
+function hashText(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
 export class CrawlerService {
   private readonly indexing = new IndexingService();
   private readonly vectorStore = new VectorStoreManager(new JsonProvider());
@@ -83,6 +89,10 @@ export class CrawlerService {
     return targets.map(toSummary);
   }
 
+  async deleteTargetsForBusiness(businessId: string): Promise<void> {
+    await prisma.crawlTarget.deleteMany({ where: { businessId } });
+  }
+
   /** The actual work — call this from a background task (e.g. Next.js
    * `after()`), not inline in a request handler a user is waiting on. */
   async runCrawl(id: string): Promise<CrawlTargetSummary> {
@@ -92,7 +102,11 @@ export class CrawlerService {
     await this.vectorStore.initialize();
 
     try {
-      const estimate = await estimatePageCount(target.url, MAX_PAGES);
+      // Sitemaps can undercount real reachable pages (BFS finds links a
+      // sitemap doesn't list) — track the estimate in a mutable local so
+      // it can grow to match reality instead of pagesDone silently
+      // exceeding a denominator that never moves.
+      let estimate = await estimatePageCount(target.url, MAX_PAGES);
 
       await prisma.crawlTarget.update({
         where: { id },
@@ -102,13 +116,35 @@ export class CrawlerService {
       const pages = await crawlSite(target.url, {
         maxPages: MAX_PAGES,
         onPage: (pagesDone) => {
+          if (pagesDone > estimate) {
+            estimate = pagesDone;
+          }
+
           // Fire-and-forget progress update — losing one write to a
           // transient DB hiccup shouldn't abort the crawl itself.
           prisma.crawlTarget
-            .update({ where: { id }, data: { pagesDone } })
+            .update({ where: { id }, data: { pagesDone, pagesEstimated: estimate } })
             .catch(() => {});
         },
       });
+
+      // One lookup of existing chunk metadata up front (not per page) so
+      // we can tell new vs. updated vs. unchanged pages without embedding
+      // content that hasn't actually changed since the last crawl.
+      const existingRecords = await this.vectorStore.listAll();
+      const existingHashByDoc = new Map<string, string>();
+      const existingChunkCountByDoc = new Map<string, number>();
+
+      for (const record of existingRecords) {
+        existingChunkCountByDoc.set(
+          record.documentId,
+          (existingChunkCountByDoc.get(record.documentId) ?? 0) + 1
+        );
+
+        if (!existingHashByDoc.has(record.documentId) && record.metadata?.contentHash) {
+          existingHashByDoc.set(record.documentId, record.metadata.contentHash as string);
+        }
+      }
 
       let chunkCount = 0;
 
@@ -116,6 +152,23 @@ export class CrawlerService {
         // Stable per-page documentId so a re-crawl replaces that page's
         // old chunks instead of piling up duplicates forever.
         const documentId = `crawl:${id}:${page.url}`;
+        const contentHash = hashText(page.text);
+        const previousHash = existingHashByDoc.get(documentId);
+
+        if (previousHash === contentHash) {
+          chunkCount += existingChunkCountByDoc.get(documentId) ?? 0;
+
+          // Content identical to last crawl — no need to re-embed it,
+          // just refresh the status/timestamp shown in the Knowledge Hub.
+          await this.vectorStore.updateMetadata(documentId, {
+            pageStatus: "unchanged",
+            lastCrawledAt: new Date().toISOString(),
+          });
+
+          continue;
+        }
+
+        const pageStatus = previousHash ? "updated" : "new";
 
         await this.vectorStore.deleteByDocumentId(documentId);
 
@@ -127,6 +180,9 @@ export class CrawlerService {
             businessId: target.businessId,
             source: "crawler",
             url: page.url,
+            contentHash,
+            pageStatus,
+            lastCrawledAt: new Date().toISOString(),
           },
         });
 
@@ -138,7 +194,7 @@ export class CrawlerService {
         data: {
           status: "done",
           // Self-correct the estimate to the real count so the bar reads
-          // 100%, not stuck below it if the sitemap over-counted.
+          // 100%, not stuck below it if the sitemap over/under-counted.
           pagesEstimated: pages.length,
           pagesDone: pages.length,
           lastCrawledAt: new Date(),

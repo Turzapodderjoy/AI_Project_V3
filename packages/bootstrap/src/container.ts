@@ -66,14 +66,26 @@ export class Container {
         new IndexingService()
       );
 
+    const crawlerService =
+      new CrawlerService();
+
     this.router =
       new ApiRouter(
         new ChatController(rag),
         new UploadController(uploadService),
         new HealthController(),
-        new AdminController(ai, vectorStore, embeddings, chatUsageLog, responseCache, new TenantService()),
+        new AdminController(
+          ai,
+          vectorStore,
+          embeddings,
+          chatUsageLog,
+          responseCache,
+          new TenantService(),
+          conversations,
+          crawlerService
+        ),
         new HandoffController(conversations),
-        new CrawlerController(new CrawlerService())
+        new CrawlerController(crawlerService)
       );
   }
 

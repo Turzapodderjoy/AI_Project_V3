@@ -29,4 +29,8 @@ export interface VectorStore {
   listAll(): Promise<VectorRecord[]>;
 
   deleteByDocumentId(documentId: string): Promise<void>;
+
+  /** Patches metadata on every chunk of a document without touching its
+   * embedding — for status updates that shouldn't cost a re-embed. */
+  updateMetadata(documentId: string, patch: Record<string, unknown>): Promise<void>;
 }

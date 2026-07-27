@@ -168,6 +168,16 @@ function ClientsPanel() {
     }
   }
 
+  async function deleteClient(client: Client) {
+    const confirmed = window.confirm(
+      `Delete "${client.name}"? This permanently removes their conversations, crawl targets, and indexed knowledge base — it cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    await fetch(`/api/admin/clients/${client.id}`, { method: "DELETE" });
+    refresh();
+  }
+
   return (
     <section>
       <h2>Clients</h2>
@@ -202,6 +212,7 @@ function ClientsPanel() {
               <th style={cellStyle}>Name</th>
               <th style={cellStyle}>Created</th>
               <th style={cellStyle}>Dashboard</th>
+              <th style={cellStyle}></th>
             </tr>
           </thead>
           <tbody>
@@ -212,11 +223,14 @@ function ClientsPanel() {
                 <td style={cellStyle}>
                   <a href={`/dashboard/${c.id}`}>/dashboard/{c.id}</a>
                 </td>
+                <td style={cellStyle}>
+                  <button onClick={() => deleteClient(c)}>Delete</button>
+                </td>
               </tr>
             ))}
             {clients.length === 0 && (
               <tr>
-                <td style={cellStyle} colSpan={3}>
+                <td style={cellStyle} colSpan={4}>
                   No clients yet — add one above.
                 </td>
               </tr>

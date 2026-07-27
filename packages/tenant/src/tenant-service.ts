@@ -50,4 +50,11 @@ export class TenantService {
       data: { name, slug },
     });
   }
+
+  /** Memberships cascade via the schema; conversations/crawl targets/
+   * knowledge chunks are cleaned up separately by the caller (they're
+   * plain-string businessId references, not Prisma relations). */
+  async deleteBusiness(id: string) {
+    return prisma.business.delete({ where: { id } });
+  }
 }

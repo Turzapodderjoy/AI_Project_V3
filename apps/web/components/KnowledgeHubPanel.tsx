@@ -9,6 +9,8 @@ interface KnowledgeDocument {
   documentId: string;
   filename: string;
   chunks: number;
+  status: string;
+  lastCrawledAt: string | null;
 }
 
 interface CrawlTarget {
@@ -101,6 +103,20 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
     refreshTargets();
   }
 
+  async function deleteDocument(doc: KnowledgeDocument) {
+    const confirmed = window.confirm(
+      `Delete "${doc.filename}" (${doc.chunks} chunk${doc.chunks === 1 ? "" : "s"}) from the knowledge base? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    await fetch("/api/admin/knowledge/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentId: doc.documentId }),
+    });
+    refreshDocuments();
+  }
+
   return (
     <section>
       <h2>Knowledge Hub</h2>
@@ -180,23 +196,31 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
           <thead>
             <tr>
               <th style={cellStyle}>Filename</th>
+              <th style={cellStyle}>Status</th>
               <th style={cellStyle}>Chunks</th>
               <th style={cellStyle}>Document ID</th>
+              <th style={cellStyle}></th>
             </tr>
           </thead>
           <tbody>
             {documents.map((d) => (
               <tr key={d.documentId}>
                 <td style={cellStyle}>{d.filename}</td>
+                <td style={cellStyle}>
+                  <DocumentStatus status={d.status} lastCrawledAt={d.lastCrawledAt} />
+                </td>
                 <td style={cellStyle}>{d.chunks}</td>
                 <td style={cellStyle}>
                   <code style={{ fontSize: 11 }}>{d.documentId}</code>
+                </td>
+                <td style={cellStyle}>
+                  <button onClick={() => deleteDocument(d)}>Delete</button>
                 </td>
               </tr>
             ))}
             {documents.length === 0 && (
               <tr>
-                <td style={cellStyle} colSpan={3}>
+                <td style={cellStyle} colSpan={5}>
                   Nothing indexed yet — upload a file or crawl a site above.
                 </td>
               </tr>
@@ -243,5 +267,26 @@ function CrawlProgress({ target }: { target: CrawlTarget }) {
         {target.pagesDone}/{total} ({pct}%)
       </span>
     </div>
+  );
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  new: "🆕 new",
+  updated: "🔄 updated",
+  unchanged: "✅ unchanged",
+  uploaded: "📄 uploaded",
+};
+
+function DocumentStatus({
+  status,
+  lastCrawledAt,
+}: {
+  status: string;
+  lastCrawledAt: string | null;
+}) {
+  return (
+    <span title={lastCrawledAt ? `Last crawled ${new Date(lastCrawledAt).toLocaleString()}` : undefined}>
+      {STATUS_LABEL[status] ?? status}
+    </span>
   );
 }

@@ -90,6 +90,25 @@ export class JsonProvider implements VectorStore {
     );
   }
 
+  async updateMetadata(
+    documentId: string,
+    patch: Record<string, unknown>
+  ): Promise<void> {
+    const current = await this.read();
+
+    const updated = current.map((r) =>
+      r.documentId === documentId
+        ? { ...r, metadata: { ...r.metadata, ...patch } }
+        : r
+    );
+
+    await fs.writeFile(
+      this.filePath,
+      JSON.stringify(updated, null, 2),
+      "utf8"
+    );
+  }
+
   private cosineSimilarity(
     a: number[],
     b: number[]

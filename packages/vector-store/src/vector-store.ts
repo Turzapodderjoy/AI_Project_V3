@@ -34,4 +34,8 @@ export class VectorStoreManager {
   async deleteByDocumentId(documentId: string): Promise<void> {
     return this.provider.deleteByDocumentId(documentId);
   }
+
+  async updateMetadata(documentId: string, patch: Record<string, unknown>): Promise<void> {
+    return this.provider.updateMetadata(documentId, patch);
+  }
 }

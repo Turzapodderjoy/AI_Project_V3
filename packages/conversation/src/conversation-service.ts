@@ -124,4 +124,10 @@ export class ConversationService {
       data: { handoffStatus: "HUMAN" },
     });
   }
+
+  /** Deletes every conversation for a business — messages cascade via
+   * the schema's onDelete: Cascade. Used when a client is removed. */
+  async deleteByBusinessId(businessId: string): Promise<void> {
+    await prisma.conversation.deleteMany({ where: { businessId } });
+  }
 }
