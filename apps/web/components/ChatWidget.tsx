@@ -11,8 +11,12 @@ interface Message {
   cached?: boolean;
 }
 
+function sessionKey(businessId: string): string {
+  return `chatSessionId:${businessId}`;
+}
+
 function getSessionId(businessId: string): string {
-  const key = `chatSessionId:${businessId}`;
+  const key = sessionKey(businessId);
   const existing = window.localStorage.getItem(key);
 
   if (existing) {
@@ -107,11 +111,26 @@ export function ChatWidget({ businessId = "default" }: { businessId?: string }) 
     }
   }
 
+  function newChat() {
+    window.localStorage.removeItem(sessionKey(businessId));
+    setSessionId(getSessionId(businessId));
+    setMessages([]);
+    setWaitingForAgent(false);
+    seenCount.current = 0;
+  }
+
   return (
     <div>
       <p style={{ opacity: 0.5, fontSize: 12 }}>
         Chat ID: {sessionId}
         {waitingForAgent && " · connected to a human agent"}
+        {" · "}
+        <button
+          onClick={newChat}
+          style={{ fontSize: 12, padding: "1px 6px", cursor: "pointer" }}
+        >
+          New chat
+        </button>
       </p>
 
       <div

@@ -31,6 +31,12 @@ const HANDOFF_MESSAGE_EN =
 const HANDOFF_MESSAGE_BN =
   "এই বিষয়ে আমাদের নলেজ বেসে সুনির্দিষ্ট তথ্য নেই। আমি আপনাকে একজন টিম মেম্বারের সাথে সংযুক্ত করছি — তিনি এই কথোপকথন যেখানে শেষ হয়েছে সেখান থেকেই শুরু করবেন।";
 
+const ALREADY_WAITING_MESSAGE_EN =
+  "You're connected with a human agent — they'll see your message and reply here shortly.";
+
+const ALREADY_WAITING_MESSAGE_BN =
+  "আপনি একজন মানব এজেন্টের সাথে সংযুক্ত আছেন — তিনি শীঘ্রই এখানে আপনার বার্তা দেখে উত্তর দেবেন।";
+
 // ponytail: Bangla-script detection only (Unicode block ঀ-৿) —
 // cheap and exact, no AI call needed for this canned message. Banglish
 // (romanized Bengali) isn't reliably detectable by regex, so it falls
@@ -39,6 +45,21 @@ const HANDOFF_MESSAGE_BN =
 function isBangla(text: string): boolean {
   return /[ঀ-৿]/.test(text);
 }
+
+// A greeting isn't a knowledge-base question, so it shouldn't go through
+// retrieval/confidence at all — otherwise "hello" can legitimately score
+// below the handoff threshold (no KB content is *about* greetings) and
+// hand off a conversation that never needed a human. Deterministic and
+// free, same reasoning as isBangla() above.
+const GREETING_PATTERN =
+  /^(hi|hello+|hey+|hola|yo|salam|assalamu ?alaikum|slm|kemon (achen|acho)|kmn (achen|acho)|হাই|হ্যালো|আসসালামু ?আলাইকুম|সালাম|কেমন আছেন|কেমন আছো)[\s!.,?।]*$/i;
+
+function isGreeting(text: string): boolean {
+  return GREETING_PATTERN.test(text.trim());
+}
+
+const GREETING_REPLY_EN = "Hello! How can I help you today?";
+const GREETING_REPLY_BN = "হ্যালো! আমি আপনাকে কীভাবে সাহায্য করতে পারি?";
 
 const SYSTEM_PROMPT = `You are a helpful AI assistant answering customer questions for this business.
 
@@ -95,13 +116,37 @@ export class ChatService {
     );
 
     // Already being handled by a human — don't let the bot jump back in.
+    // (Doesn't record this as a message: the customer's real messages
+    // while waiting should just accumulate for the agent to read, not
+    // get interleaved with a repeated "you're waiting" notice.)
     if (conversation.handoffStatus !== "bot") {
       return {
-        answer: "",
+        answer: isBangla(request.message)
+          ? ALREADY_WAITING_MESSAGE_BN
+          : ALREADY_WAITING_MESSAGE_EN,
         provider: "human",
         tokens: 0,
         confidence: 0,
         handoff: true,
+      };
+    }
+
+    if (isGreeting(request.message)) {
+      const greetingReply = isBangla(request.message)
+        ? GREETING_REPLY_BN
+        : GREETING_REPLY_EN;
+
+      await this.conversations.addMessage(
+        request.sessionId,
+        "assistant",
+        greetingReply
+      );
+
+      return {
+        answer: greetingReply,
+        provider: "greeting",
+        tokens: 0,
+        confidence: 1,
       };
     }
 
