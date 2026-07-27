@@ -9,13 +9,20 @@ export class CrawlerController {
     return this.crawler.listTargets(businessId);
   }
 
-  add(businessId: string, url: string) {
+  /** Queues the target; the caller (a route handler) is responsible for
+   * running `runCrawl` in the background and responding immediately. */
+  queue(businessId: string, url: string) {
     new URL(url); // throws on malformed input
     return this.crawler.addTarget(businessId, url);
   }
 
-  recrawlOne(id: string) {
-    return this.crawler.crawlTarget(id);
+  requeue(id: string) {
+    return this.crawler.queueForCrawl(id);
+  }
+
+  /** The actual crawl — only call this from a background task. */
+  runCrawl(id: string) {
+    return this.crawler.runCrawl(id);
   }
 
   recrawlAll() {

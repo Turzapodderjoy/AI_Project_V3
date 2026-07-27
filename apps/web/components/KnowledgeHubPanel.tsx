@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { UploadWidget } from "./UploadWidget";
 import { cellStyle } from "./dashboard-styles";
@@ -14,11 +14,16 @@ interface KnowledgeDocument {
 interface CrawlTarget {
   id: string;
   url: string;
+  status: string;
+  pagesEstimated: number | null;
+  pagesDone: number;
   lastCrawledAt: string | null;
   lastPageCount: number | null;
   lastChunkCount: number | null;
   lastError: string | null;
 }
+
+const ACTIVE_STATUSES = new Set(["queued", "crawling"]);
 
 /** Reused as-is by both the mother dashboard (no businessId = everything)
  * and every per-client dashboard (/dashboard/[businessId]) — one component,
@@ -27,8 +32,9 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
   const [documents, setDocuments] = useState<KnowledgeDocument[] | null>(null);
   const [targets, setTargets] = useState<CrawlTarget[] | null>(null);
   const [url, setUrl] = useState("");
-  const [crawling, setCrawling] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [crawlMessage, setCrawlMessage] = useState("");
+  const wasActive = useRef(false);
 
   function refreshDocuments() {
     const qs = businessId ? `?businessId=${encodeURIComponent(businessId)}` : "";
@@ -41,17 +47,30 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
     const qs = businessId ? `?businessId=${encodeURIComponent(businessId)}` : "";
     fetch(`/api/admin/crawler${qs}`)
       .then((r) => r.json())
-      .then((data) => setTargets(data.targets));
+      .then((data: { targets: CrawlTarget[] }) => {
+        setTargets(data.targets);
+
+        const active = data.targets.some((t) => ACTIVE_STATUSES.has(t.status));
+        if (wasActive.current && !active) {
+          refreshDocuments(); // a crawl just finished — pick up new chunks
+        }
+        wasActive.current = active;
+      });
   }
 
   useEffect(() => {
     refreshDocuments();
     refreshTargets();
+
+    // Poll every 2s while anything is crawling so the progress bar moves;
+    // the interval is cheap to leave running since it's just one query.
+    const interval = setInterval(refreshTargets, 2000);
+    return () => clearInterval(interval);
   }, [businessId]);
 
   async function addSite() {
     if (!url.trim()) return;
-    setCrawling(true);
+    setAdding(true);
     setCrawlMessage("");
 
     try {
@@ -62,19 +81,14 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
       });
       const result = await res.json();
 
-      setCrawlMessage(
-        res.ok
-          ? `Crawled ${result.lastPageCount ?? 0} page(s), ${result.lastChunkCount ?? 0} chunk(s).`
-          : `Error: ${result.error}`
-      );
-
       if (res.ok) {
         setUrl("");
         refreshTargets();
-        refreshDocuments();
+      } else {
+        setCrawlMessage(`Error: ${result.error}`);
       }
     } finally {
-      setCrawling(false);
+      setAdding(false);
     }
   }
 
@@ -85,7 +99,6 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
       body: JSON.stringify({ id }),
     });
     refreshTargets();
-    refreshDocuments();
   }
 
   return (
@@ -113,8 +126,8 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
             if (e.key === "Enter") addSite();
           }}
         />
-        <button onClick={addSite} disabled={crawling}>
-          {crawling ? "Crawling…" : "Add & crawl now"}
+        <button onClick={addSite} disabled={adding}>
+          {adding ? "Queuing…" : "Add & crawl"}
         </button>
       </div>
 
@@ -125,9 +138,9 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
           <thead>
             <tr>
               <th style={cellStyle}>URL</th>
+              <th style={cellStyle}>Progress</th>
               <th style={cellStyle}>Last crawled</th>
               <th style={cellStyle}>Pages / chunks</th>
-              <th style={cellStyle}>Status</th>
               <th style={cellStyle}></th>
             </tr>
           </thead>
@@ -136,14 +149,21 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
               <tr key={t.id}>
                 <td style={cellStyle}>{t.url}</td>
                 <td style={cellStyle}>
+                  <CrawlProgress target={t} />
+                </td>
+                <td style={cellStyle}>
                   {t.lastCrawledAt ? new Date(t.lastCrawledAt).toLocaleString() : "never"}
                 </td>
                 <td style={cellStyle}>
                   {t.lastPageCount ?? "—"} / {t.lastChunkCount ?? "—"}
                 </td>
-                <td style={cellStyle}>{t.lastError ? `❌ ${t.lastError}` : "✅"}</td>
                 <td style={cellStyle}>
-                  <button onClick={() => recrawl(t.id)}>Recrawl now</button>
+                  <button
+                    onClick={() => recrawl(t.id)}
+                    disabled={ACTIVE_STATUSES.has(t.status)}
+                  >
+                    Recrawl now
+                  </button>
                 </td>
               </tr>
             ))}
@@ -185,5 +205,43 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
         </table>
       )}
     </section>
+  );
+}
+
+function CrawlProgress({ target }: { target: CrawlTarget }) {
+  if (target.status === "error") {
+    return <span title={target.lastError ?? ""}>❌ {target.lastError}</span>;
+  }
+
+  if (target.status === "done") {
+    return <span>✅ complete</span>;
+  }
+
+  if (target.status === "queued") {
+    return <span style={{ opacity: 0.6 }}>queued…</span>;
+  }
+
+  // "crawling" — inspected the site first (pagesEstimated), now filling
+  // the bar in as pages are actually crawled.
+  const total = target.pagesEstimated ?? 1;
+  const pct = Math.min(100, Math.round((target.pagesDone / total) * 100));
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ flex: 1, background: "#333", borderRadius: 4, height: 8, minWidth: 80 }}>
+        <div
+          style={{
+            width: `${pct}%`,
+            background: "#4caf50",
+            height: "100%",
+            borderRadius: 4,
+            transition: "width 0.3s",
+          }}
+        />
+      </div>
+      <span style={{ fontSize: 12, opacity: 0.7 }}>
+        {target.pagesDone}/{total} ({pct}%)
+      </span>
+    </div>
   );
 }

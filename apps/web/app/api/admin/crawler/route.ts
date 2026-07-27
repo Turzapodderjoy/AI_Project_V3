@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 
 import { getApp } from "../../../../lib/app";
 
@@ -19,7 +20,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const app = await getApp();
-    const target = await app.container.router.crawler.add(body.businessId, body.url);
+    const target = await app.container.router.crawler.queue(body.businessId, body.url);
+
+    // Respond immediately with "queued"; the client polls GET for
+    // progress while this runs in the background.
+    after(() => app.container.router.crawler.runCrawl(target.id).catch(() => {}));
+
     return NextResponse.json(target);
   } catch (err) {
     return NextResponse.json(

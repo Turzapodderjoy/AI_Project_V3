@@ -9,6 +9,7 @@ export interface CrawledPage {
 export interface CrawlOptions {
   maxPages?: number;
   delayMs?: number;
+  onPage?: (pagesDone: number) => void;
 }
 
 const DELAY_MS_DEFAULT = 500;
@@ -70,6 +71,7 @@ export async function crawlSite(
 
       if (text.length > 0) {
         pages.push({ url, text });
+        options.onPage?.(pages.length);
       }
 
       for (const link of extractLinks(html, url)) {

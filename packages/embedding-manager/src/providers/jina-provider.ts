@@ -2,6 +2,7 @@ import type {
   EmbeddingProvider,
   EmbeddingResult,
 } from "../types";
+import { retryOn429 } from "../retry";
 
 interface JinaEmbeddingItem {
   embedding: number[];
@@ -28,30 +29,35 @@ export class JinaProvider implements EmbeddingProvider {
     }
   }
 
-  async embed(text: string): Promise<EmbeddingResult> {
-    const response = await fetch(
-      "https://api.jina.ai/v1/embeddings",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "jina-embeddings-v3",
-          input: [text],
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `Jina API Error: ${response.status} ${response.statusText}`
+  private async callApi(input: string[]): Promise<JinaEmbeddingResponse> {
+    return retryOn429(async () => {
+      const response = await fetch(
+        "https://api.jina.ai/v1/embeddings",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "jina-embeddings-v3",
+            input,
+          }),
+        }
       );
-    }
 
-    const json =
-      (await response.json()) as JinaEmbeddingResponse;
+      if (!response.ok) {
+        throw new Error(
+          `Jina API Error: ${response.status} ${response.statusText}`
+        );
+      }
+
+      return response.json() as Promise<JinaEmbeddingResponse>;
+    });
+  }
+
+  async embed(text: string): Promise<EmbeddingResult> {
+    const json = await this.callApi([text]);
 
     if (!json.data || json.data.length === 0) {
       throw new Error("Jina returned no embeddings.");
@@ -74,29 +80,7 @@ export class JinaProvider implements EmbeddingProvider {
   async embedMany(
     texts: string[]
   ): Promise<EmbeddingResult[]> {
-    const response = await fetch(
-      "https://api.jina.ai/v1/embeddings",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "jina-embeddings-v3",
-          input: texts,
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `Jina API Error: ${response.status} ${response.statusText}`
-      );
-    }
-
-    const json =
-      (await response.json()) as JinaEmbeddingResponse;
+    const json = await this.callApi(texts);
 
     if (!json.data || json.data.length === 0) {
       throw new Error("Jina returned no embeddings.");

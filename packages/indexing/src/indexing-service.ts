@@ -47,40 +47,40 @@ export class IndexingService {
       request.documentId ??
       crypto.randomUUID();
 
-    const vectors = [];
+    // One batched call for every chunk instead of one call per chunk —
+    // the difference between 1 request and N requests to the embedding
+    // API per document, which is what was triggering Jina's 429s.
+    const embeddings =
+      chunks.length > 0
+        ? await this.embeddingManager.embedMany(
+            chunks.map((chunk) => chunk.content)
+          )
+        : [];
 
-    for (const chunk of chunks) {
+    const vectors = chunks.map((chunk, i) => ({
+      id: crypto.randomUUID(),
 
-      const embedding =
-        await this.embeddingManager.embed(
-          chunk.content
-        );
+      documentId,
 
-      vectors.push({
-        id: crypto.randomUUID(),
+      chunkId: chunk.id,
 
-        documentId,
+      text: chunk.content,
 
-        chunkId: chunk.id,
+      embedding:
+        embeddings[i]!.embedding,
 
-        text: chunk.content,
-
-        embedding:
-          embedding.embedding,
-
-        metadata: {
-          filename: request.filename,
-          chunkIndex: chunk.index,
-          startOffset:
-            chunk.startOffset,
-          endOffset:
-            chunk.endOffset,
-          tokenEstimate:
-            chunk.tokenEstimate,
-          ...(request.metadata ?? {})
-        }
-      });
-    }
+      metadata: {
+        filename: request.filename,
+        chunkIndex: chunk.index,
+        startOffset:
+          chunk.startOffset,
+        endOffset:
+          chunk.endOffset,
+        tokenEstimate:
+          chunk.tokenEstimate,
+        ...(request.metadata ?? {})
+      }
+    }));
 
     await this.vectorStore.upsert(
       vectors
