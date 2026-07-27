@@ -25,8 +25,30 @@ import type {
  */
 const HANDOFF_CONFIDENCE_THRESHOLD = 0.5;
 
-const HANDOFF_MESSAGE =
+const HANDOFF_MESSAGE_EN =
   "I don't have specific information about that in our knowledge base. Let me connect you with a team member who can help — they'll pick up right where this conversation left off.";
+
+const HANDOFF_MESSAGE_BN =
+  "এই বিষয়ে আমাদের নলেজ বেসে সুনির্দিষ্ট তথ্য নেই। আমি আপনাকে একজন টিম মেম্বারের সাথে সংযুক্ত করছি — তিনি এই কথোপকথন যেখানে শেষ হয়েছে সেখান থেকেই শুরু করবেন।";
+
+// ponytail: Bangla-script detection only (Unicode block ঀ-৿) —
+// cheap and exact, no AI call needed for this canned message. Banglish
+// (romanized Bengali) isn't reliably detectable by regex, so it falls
+// back to the English canned message; the real Banglish handling is in
+// the system prompt below, for actual LLM-generated answers.
+function isBangla(text: string): boolean {
+  return /[ঀ-৿]/.test(text);
+}
+
+const SYSTEM_PROMPT = `You are a helpful AI assistant answering customer questions for this business.
+
+Answer only from the provided knowledge base whenever possible — never invent information that isn't there.
+
+Language handling:
+- The knowledge base may contain Bangla (Bengali script), Banglish (Bengali written in Latin letters), and English, in any mix — understand and use all of it regardless of which one it's written in.
+- Reply in whichever of Bangla, Banglish, or English the customer just used — match their language and style.
+- If the customer explicitly asks for a specific language, use that instead of mirroring them.
+- The knowledge base being in a different language than the question or the answer is normal — translate the facts, don't refuse or claim the information is missing just because of a language mismatch.`;
 
 // How many prior turns to feed back into the prompt. Unbounded history
 // would grow the prompt (and cost) forever; this is enough for a
@@ -142,10 +164,14 @@ export class ChatService {
         summary
       );
 
+      const handoffMessage = isBangla(request.message)
+        ? HANDOFF_MESSAGE_BN
+        : HANDOFF_MESSAGE_EN;
+
       await this.conversations.addMessage(
         request.sessionId,
         "assistant",
-        HANDOFF_MESSAGE
+        handoffMessage
       );
 
       this.usageLog.record({
@@ -157,7 +183,7 @@ export class ChatService {
       });
 
       return {
-        answer: HANDOFF_MESSAGE,
+        answer: handoffMessage,
         provider: "handoff",
         tokens: 0,
         confidence,
@@ -167,8 +193,7 @@ export class ChatService {
 
     const prompt =
       this.prompts.build({
-        systemPrompt:
-          "You are a helpful AI assistant. Answer only from the provided knowledge base whenever possible.",
+        systemPrompt: SYSTEM_PROMPT,
         context:
           retrieved.map(chunk => chunk.text),
         history:
@@ -227,7 +252,7 @@ export class ChatService {
 
     try {
       const result = await this.ai.chat(
-        `Summarize this customer conversation in 2-3 sentences for a support agent taking over. Focus on what the customer wants and what's unresolved.\n\n${transcript}`
+        `Summarize this customer conversation in 2-3 sentences for a support agent taking over. Focus on what the customer wants and what's unresolved. The conversation may be in Bangla, Banglish, or English — write the summary in English regardless, since it's for internal review.\n\n${transcript}`
       );
       return result.response;
     } catch {
