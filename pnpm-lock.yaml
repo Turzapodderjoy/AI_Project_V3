@@ -107,6 +107,12 @@ importers:
         specifier: 5.9.2
         version: 5.9.2
 
+  packages/ai-config:
+    dependencies:
+      '@ai-chat-platform/database':
+        specifier: workspace:*
+        version: link:../database
+
   packages/ai-manager:
     dependencies:
       '@ai-chat-platform/provider-orchestrator':
@@ -118,6 +124,9 @@ importers:
 
   packages/api:
     dependencies:
+      '@ai-chat-platform/ai-config':
+        specifier: workspace:*
+        version: link:../ai-config
       '@ai-chat-platform/ai-manager':
         specifier: workspace:*
         version: link:../ai-manager
@@ -170,6 +179,9 @@ importers:
 
   packages/bootstrap:
     dependencies:
+      '@ai-chat-platform/ai-config':
+        specifier: workspace:*
+        version: link:../ai-config
       '@ai-chat-platform/ai-manager':
         specifier: workspace:*
         version: link:../ai-manager
@@ -233,6 +245,9 @@ importers:
 
   packages/chat-service:
     dependencies:
+      '@ai-chat-platform/ai-config':
+        specifier: workspace:*
+        version: link:../ai-config
       '@ai-chat-platform/ai-manager':
         specifier: workspace:*
         version: link:../ai-manager

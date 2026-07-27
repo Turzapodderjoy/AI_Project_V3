@@ -4,6 +4,7 @@ import { HealthController } from "./health-controller";
 import { AdminController } from "./admin-controller";
 import { HandoffController } from "./handoff-controller";
 import { CrawlerController } from "./crawler-controller";
+import { AiConfigController } from "./ai-config-controller";
 
 export class ApiRouter {
   constructor(
@@ -12,6 +13,7 @@ export class ApiRouter {
     readonly health: HealthController,
     readonly admin: AdminController,
     readonly handoff: HandoffController,
-    readonly crawler: CrawlerController
+    readonly crawler: CrawlerController,
+    readonly aiConfig: AiConfigController
   ) {}
 }

@@ -119,3 +119,22 @@ model CrawlTarget {
 
   @@unique([businessId, url])
 }
+
+// Every save (full update or incremental append) inserts a new row —
+// never mutates an old one. That makes the table both "current config"
+// (latest row) and "full history" (every row) at the same time, with
+// no separate audit-log table to keep in sync.
+model AiConfigVersion {
+  id           String   @id @default(cuid())
+
+  systemPrompt String
+  handoffFloor Float
+  historyTurns Int
+
+  changeType   String   // "seed" | "update" | "append"
+  note         String?
+
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}

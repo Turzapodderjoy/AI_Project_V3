@@ -5,12 +5,14 @@ import { useEffect, useState } from "react";
 import { ChatWidget } from "../../components/ChatWidget";
 import { KnowledgeHubPanel } from "../../components/KnowledgeHubPanel";
 import { HandoffsPanel } from "../../components/HandoffsPanel";
+import { AiBrainPanel } from "../../components/AiBrainPanel";
 import { cellStyle, formatBytes } from "../../components/dashboard-styles";
 
-type Tab = "ai" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
+type Tab = "ai" | "brain" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "ai", label: "AI Providers" },
+  { id: "brain", label: "AI Brain" },
   { id: "usage", label: "Usage" },
   { id: "clients", label: "Clients" },
   { id: "knowledge", label: "Knowledge Hub" },
@@ -115,6 +117,9 @@ export default function DashboardPage() {
           switching tabs never wipes a panel's local state. */}
       <div style={{ display: tab === "ai" ? "block" : "none" }}>
         <AiProvidersPanel />
+      </div>
+      <div style={{ display: tab === "brain" ? "block" : "none" }}>
+        <AiBrainPanel />
       </div>
       <div style={{ display: tab === "usage" ? "block" : "none" }}>
         <UsagePanel />

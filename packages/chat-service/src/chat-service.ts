@@ -3,6 +3,7 @@ import { PromptEngine } from "@ai-chat-platform/prompt-engine";
 import { Retriever } from "@ai-chat-platform/retriever";
 import { ConversationService, ConversationMessage } from "@ai-chat-platform/conversation";
 import { EmbeddingManager } from "@ai-chat-platform/embedding-manager";
+import { AiConfigService } from "@ai-chat-platform/ai-config";
 
 import { ChatUsageLog } from "./chat-usage-log";
 import { ResponseCache } from "./response-cache";
@@ -10,23 +11,6 @@ import type {
   ChatRequest,
   ChatResponse,
 } from "./types";
-
-/**
- * This is now just a "did retrieval find anything at all" floor, not a
- * quality gate — below it we skip the LLM call entirely (nothing to
- * ground an answer on, so don't spend tokens pretending). At or above
- * it, the LLM sees whatever was retrieved and decides for itself
- * whether that's enough to answer, ask a clarifying question, or admit
- * it can't help — the same judgment call a real support agent makes,
- * not something a single confidence number can substitute for.
- *
- * ponytail: 0.2 is a rough recalibration from ~10 manual queries
- * (relevant answers scored 0.57-0.72, clearly off-topic ones 0.44-0.45,
- * genuinely-empty-KB is 0) — chosen low on purpose so ambiguous-but-
- * on-topic questions reach the LLM instead of being auto-rejected.
- * Revisit with real usage data; embedding-model-specific.
- */
-const HANDOFF_CONFIDENCE_FLOOR = 0.2;
 
 const HANDOFF_MESSAGE_EN =
   "I don't have any information about that in our knowledge base. Let me connect you with a team member who can help — they'll pick up right where this conversation left off.";
@@ -49,36 +33,6 @@ function isBangla(text: string): boolean {
   return /[ঀ-৿]/.test(text);
 }
 
-const SYSTEM_PROMPT = `You are a friendly, professional, empathetic customer support agent for this business, chatting live with a customer. Act like a real person on a support team — not a document search tool, and not a translation engine.
-
-CONVERSATION STYLE
-- Handle greetings, small talk, and pleasantries naturally and warmly, in your own words — you don't need the knowledge base for this.
-- If a question is ambiguous or missing a key detail (e.g. "the price" without saying which product), ask a short, natural clarifying question instead of saying the information isn't available — the way a human agent would ask "Sure — which product did you mean?"
-- Keep answers short and scannable, not essays. Use a short list for multi-step instructions.
-- Acknowledge frustration naturally, and speak with ownership ("I'm checking that now") rather than passive voice ("it is being checked").
-- Only say you can't help and offer to connect the customer with a team member if the knowledge base genuinely doesn't cover the topic even after you've tried to understand the question, or if the customer explicitly asks for a human.
-
-ANSWERING FROM THE KNOWLEDGE BASE
-- Answer factual questions only from the provided knowledge base — never invent information that isn't there.
-
-LANGUAGE — read carefully, this is the part most often gotten wrong
-You are a native Bengali speaker who is also fluent in English, replying in one of exactly three registers: natural Bangla (Bengali script), Banglish (Bangla written in Latin letters), or English. NEVER think in English and translate — literal translation produces stiff, robotic phrasing that native speakers immediately notice. Use native Bangla sentence structure and everyday conversational vocabulary, not calqued English syntax or heavily formal/Sanskritized words.
-
-Match whichever register the customer's MOST RECENT message used — not whatever language earlier turns in this conversation were in. Language can change every message; re-check it each time instead of just continuing in whatever you used last turn.
-
-- If the customer's latest message is written in Latin/Roman letters (Banglish), you MUST reply in Banglish too — do not convert it into Bengali script. Use everyday phonetic spelling (korte, hocche, somossa, apnar, dhonnobad) and blend English nouns/verbs naturally into Bangla grammar, e.g. "account ta check kore dekhchi", "payment ta fail hoyeche, apni ki abar try korben?"
-- If the customer's latest message is in Bengali script, reply in natural spoken Bangla. Always use the respectful আপনি (never তুই or তুমি). It's normal and natural to keep English loanwords for tech/business terms inside a Bangla sentence (account, refund, update, check, issue, order, payment) — that's how native speakers actually talk, not a flaw to avoid.
-  - Avoid: "আমি আপনার সমস্যাটি দেখছি এবং আমি আপনাকে সাহায্য করব।" (stiff, reads like a translation)
-  - Prefer: "আমি আপনার ইস্যুটি চেক করে দেখছি, একটু সময় দিন।" (natural, how a real agent talks)
-- If the customer's latest message is in English, reply in clear, professional English.
-- If the customer explicitly asks for a specific language, use that instead of mirroring them.
-- The knowledge base being in a different language than the question or the answer is normal — translate the underlying facts, don't refuse or claim information is missing just because of a language mismatch.`;
-
-// How many prior turns to feed back into the prompt. Unbounded history
-// would grow the prompt (and cost) forever; this is enough for a
-// customer-support-style back-and-forth without ballooning tokens.
-const HISTORY_TURNS = 10;
-
 export class ChatService {
   constructor(
     private readonly conversations: ConversationService,
@@ -87,7 +41,8 @@ export class ChatService {
     private readonly ai: AIManager,
     private readonly embeddings: EmbeddingManager,
     private readonly responseCache: ResponseCache,
-    private readonly usageLog: ChatUsageLog
+    private readonly usageLog: ChatUsageLog,
+    private readonly aiConfig: AiConfigService
   ) {}
 
   async chat(
@@ -95,6 +50,11 @@ export class ChatService {
   ): Promise<ChatResponse> {
 
     const businessId = request.businessId ?? "default";
+
+    // Read live, every request — this is the whole point of moving it
+    // out of hardcoded constants: a dashboard edit takes effect on the
+    // very next message, no redeploy or restart.
+    const config = await this.aiConfig.getCurrent();
 
     const conversation =
       await this.conversations.getOrCreate(
@@ -109,7 +69,7 @@ export class ChatService {
     const priorHistory =
       await this.conversations.history(
         request.sessionId,
-        HISTORY_TURNS
+        config.historyTurns
       );
 
     await this.conversations.addMessage(
@@ -183,7 +143,7 @@ export class ChatService {
     // the sole decider of whether the AI gets to attempt an answer.
     const confidence = retrieved[0]?.score ?? 0;
 
-    if (confidence < HANDOFF_CONFIDENCE_FLOOR) {
+    if (confidence < config.handoffFloor) {
       const fullHistory = [
         ...priorHistory,
         { role: "user" as const, content: request.message, createdAt: new Date() },
@@ -224,7 +184,7 @@ export class ChatService {
 
     const prompt =
       this.prompts.build({
-        systemPrompt: SYSTEM_PROMPT,
+        systemPrompt: config.systemPrompt,
         context:
           retrieved.map(chunk => chunk.text),
         history:

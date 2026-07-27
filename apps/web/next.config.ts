@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
     "@ai-chat-platform/provider-catalog",
     "@ai-chat-platform/tenant",
     "@ai-chat-platform/web-crawler",
+    "@ai-chat-platform/ai-config",
   ],
   serverExternalPackages: ["@lancedb/lancedb"],
 };
