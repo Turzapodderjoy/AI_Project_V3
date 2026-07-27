@@ -12,24 +12,27 @@ import type {
 } from "./types";
 
 /**
- * Below this retrieval confidence, the knowledge base almost certainly
- * doesn't cover the question — calling the LLM anyway just risks a
- * hallucinated answer (confidently wrong) instead of an honest "let me
- * get you a person." So we skip the LLM call entirely and hand off.
+ * This is now just a "did retrieval find anything at all" floor, not a
+ * quality gate — below it we skip the LLM call entirely (nothing to
+ * ground an answer on, so don't spend tokens pretending). At or above
+ * it, the LLM sees whatever was retrieved and decides for itself
+ * whether that's enough to answer, ask a clarifying question, or admit
+ * it can't help — the same judgment call a real support agent makes,
+ * not something a single confidence number can substitute for.
  *
- * ponytail: calibrated from ~6 manual test queries on Jina embeddings
- * (relevant answers scored 0.57-0.72, irrelevant ones 0.44-0.45), not a
- * validated dataset. Revisit once real usage data exists, and note this
- * is embedding-model-specific — changing the embedding provider means
- * re-checking this number.
+ * ponytail: 0.2 is a rough recalibration from ~10 manual queries
+ * (relevant answers scored 0.57-0.72, clearly off-topic ones 0.44-0.45,
+ * genuinely-empty-KB is 0) — chosen low on purpose so ambiguous-but-
+ * on-topic questions reach the LLM instead of being auto-rejected.
+ * Revisit with real usage data; embedding-model-specific.
  */
-const HANDOFF_CONFIDENCE_THRESHOLD = 0.5;
+const HANDOFF_CONFIDENCE_FLOOR = 0.2;
 
 const HANDOFF_MESSAGE_EN =
-  "I don't have specific information about that in our knowledge base. Let me connect you with a team member who can help — they'll pick up right where this conversation left off.";
+  "I don't have any information about that in our knowledge base. Let me connect you with a team member who can help — they'll pick up right where this conversation left off.";
 
 const HANDOFF_MESSAGE_BN =
-  "এই বিষয়ে আমাদের নলেজ বেসে সুনির্দিষ্ট তথ্য নেই। আমি আপনাকে একজন টিম মেম্বারের সাথে সংযুক্ত করছি — তিনি এই কথোপকথন যেখানে শেষ হয়েছে সেখান থেকেই শুরু করবেন।";
+  "এই বিষয়ে আমাদের নলেজ বেসে কোনো তথ্য নেই। আমি আপনাকে একজন টিম মেম্বারের সাথে সংযুক্ত করছি — তিনি এই কথোপকথন যেখানে শেষ হয়েছে সেখান থেকেই শুরু করবেন।";
 
 const ALREADY_WAITING_MESSAGE_EN =
   "You're connected with a human agent — they'll see your message and reply here shortly.";
@@ -38,32 +41,23 @@ const ALREADY_WAITING_MESSAGE_BN =
   "আপনি একজন মানব এজেন্টের সাথে সংযুক্ত আছেন — তিনি শীঘ্রই এখানে আপনার বার্তা দেখে উত্তর দেবেন।";
 
 // ponytail: Bangla-script detection only (Unicode block ঀ-৿) —
-// cheap and exact, no AI call needed for this canned message. Banglish
+// cheap and exact, no AI call needed for these canned messages. Banglish
 // (romanized Bengali) isn't reliably detectable by regex, so it falls
-// back to the English canned message; the real Banglish handling is in
-// the system prompt below, for actual LLM-generated answers.
+// back to the English canned message; real Banglish handling is the
+// system prompt's job, for actual LLM-generated answers.
 function isBangla(text: string): boolean {
   return /[ঀ-৿]/.test(text);
 }
 
-// A greeting isn't a knowledge-base question, so it shouldn't go through
-// retrieval/confidence at all — otherwise "hello" can legitimately score
-// below the handoff threshold (no KB content is *about* greetings) and
-// hand off a conversation that never needed a human. Deterministic and
-// free, same reasoning as isBangla() above.
-const GREETING_PATTERN =
-  /^(hi|hello+|hey+|hola|yo|salam|assalamu ?alaikum|slm|kemon (achen|acho)|kmn (achen|acho)|হাই|হ্যালো|আসসালামু ?আলাইকুম|সালাম|কেমন আছেন|কেমন আছো)[\s!.,?।]*$/i;
+const SYSTEM_PROMPT = `You are a friendly, professional customer support agent for this business, chatting live with a customer. Act like one, not like a document search tool.
 
-function isGreeting(text: string): boolean {
-  return GREETING_PATTERN.test(text.trim());
-}
+Conversation:
+- Handle greetings, small talk, and pleasantries naturally and warmly, in your own words — you don't need the knowledge base for this.
+- If the question is ambiguous or missing a key detail (for example, asking about "the price" without saying which product, or "the policy" without saying which one), ask a short, natural clarifying question instead of saying the information isn't available — the same way a human agent would ask "Sure — which product did you mean?"
+- Only say you can't help and suggest connecting the customer with a team member if the knowledge base genuinely doesn't cover the topic even after you've tried to understand the question, or if the customer explicitly asks for a human.
 
-const GREETING_REPLY_EN = "Hello! How can I help you today?";
-const GREETING_REPLY_BN = "হ্যালো! আমি আপনাকে কীভাবে সাহায্য করতে পারি?";
-
-const SYSTEM_PROMPT = `You are a helpful AI assistant answering customer questions for this business.
-
-Answer only from the provided knowledge base whenever possible — never invent information that isn't there.
+Answering from the knowledge base:
+- Answer factual questions only from the provided knowledge base — never invent information that isn't there.
 
 Language handling:
 - The knowledge base may contain Bangla (Bengali script), Banglish (Bengali written in Latin letters), and English, in any mix — understand and use all of it regardless of which one it's written in.
@@ -131,25 +125,6 @@ export class ChatService {
       };
     }
 
-    if (isGreeting(request.message)) {
-      const greetingReply = isBangla(request.message)
-        ? GREETING_REPLY_BN
-        : GREETING_REPLY_EN;
-
-      await this.conversations.addMessage(
-        request.sessionId,
-        "assistant",
-        greetingReply
-      );
-
-      return {
-        answer: greetingReply,
-        provider: "greeting",
-        tokens: 0,
-        confidence: 1,
-      };
-    }
-
     const queryEmbedding =
       (await this.embeddings.embed(request.message)).embedding;
 
@@ -194,10 +169,12 @@ export class ChatService {
       );
 
     // Top retrieval score doubles as a rough "grounding confidence" for
-    // this answer — how well the knowledge base actually backs it.
+    // this answer — how well the knowledge base actually backs it. Used
+    // for the floor check below and shown in the dashboard; no longer
+    // the sole decider of whether the AI gets to attempt an answer.
     const confidence = retrieved[0]?.score ?? 0;
 
-    if (confidence < HANDOFF_CONFIDENCE_THRESHOLD) {
+    if (confidence < HANDOFF_CONFIDENCE_FLOOR) {
       const fullHistory = [
         ...priorHistory,
         { role: "user" as const, content: request.message, createdAt: new Date() },
