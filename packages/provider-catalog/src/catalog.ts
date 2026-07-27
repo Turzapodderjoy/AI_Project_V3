@@ -1,6 +1,8 @@
 import { GroqProvider } from "@ai-chat-platform/groq";
 import { GeminiProvider } from "@ai-chat-platform/gemini";
 import { OpenRouterProvider } from "@ai-chat-platform/openrouter";
+import { CerebrasProvider } from "@ai-chat-platform/cerebras";
+import { MistralProvider } from "@ai-chat-platform/mistral";
 
 import type { ProviderCatalogEntry } from "./types";
 
@@ -32,6 +34,18 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     label: "OpenRouter",
     envKey: "OPENROUTER_API_KEY",
     create: () => new OpenRouterProvider(),
+  },
+  {
+    id: "cerebras",
+    label: "Cerebras",
+    envKey: "CEREBRAS_API_KEY",
+    create: () => new CerebrasProvider(),
+  },
+  {
+    id: "mistral",
+    label: "Mistral",
+    envKey: "MISTRAL_API_KEY",
+    create: () => new MistralProvider(),
   },
 ];
 

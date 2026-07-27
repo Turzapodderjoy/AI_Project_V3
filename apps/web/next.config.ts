@@ -12,6 +12,8 @@ const nextConfig: NextConfig = {
     "@ai-chat-platform/groq",
     "@ai-chat-platform/gemini",
     "@ai-chat-platform/openrouter",
+    "@ai-chat-platform/cerebras",
+    "@ai-chat-platform/mistral",
     "@ai-chat-platform/ingestion",
     "@ai-chat-platform/knowledge-base",
     "@ai-chat-platform/types",

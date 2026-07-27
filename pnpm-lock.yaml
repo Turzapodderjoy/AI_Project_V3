@@ -231,6 +231,12 @@ importers:
         specifier: workspace:*
         version: link:../web-crawler
 
+  packages/cerebras:
+    dependencies:
+      '@ai-chat-platform/types':
+        specifier: workspace:^
+        version: link:../types
+
   packages/chat-engine:
     dependencies:
       '@ai-chat-platform/ai-manager':
@@ -384,6 +390,12 @@ importers:
 
   packages/knowledge-base: {}
 
+  packages/mistral:
+    dependencies:
+      '@ai-chat-platform/types':
+        specifier: workspace:^
+        version: link:../types
+
   packages/openrouter:
     dependencies:
       '@ai-chat-platform/types':
@@ -398,12 +410,18 @@ importers:
 
   packages/provider-catalog:
     dependencies:
+      '@ai-chat-platform/cerebras':
+        specifier: workspace:*
+        version: link:../cerebras
       '@ai-chat-platform/gemini':
         specifier: workspace:*
         version: link:../gemini
       '@ai-chat-platform/groq':
         specifier: workspace:*
         version: link:../groq
+      '@ai-chat-platform/mistral':
+        specifier: workspace:*
+        version: link:../mistral
       '@ai-chat-platform/openrouter':
         specifier: workspace:*
         version: link:../openrouter

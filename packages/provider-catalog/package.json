@@ -10,6 +10,8 @@
     "@ai-chat-platform/types": "workspace:*",
     "@ai-chat-platform/groq": "workspace:*",
     "@ai-chat-platform/gemini": "workspace:*",
-    "@ai-chat-platform/openrouter": "workspace:*"
+    "@ai-chat-platform/openrouter": "workspace:*",
+    "@ai-chat-platform/cerebras": "workspace:*",
+    "@ai-chat-platform/mistral": "workspace:*"
   }
 }
