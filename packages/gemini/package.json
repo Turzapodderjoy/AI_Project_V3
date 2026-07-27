@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@ai-chat-platform/types": "workspace:^",
+    "@ai-chat-platform/embedding-manager": "workspace:^",
     "@google/genai": "^2.12.0"
   }
 }

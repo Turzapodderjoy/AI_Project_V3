@@ -5,6 +5,7 @@ import { AdminController } from "./admin-controller";
 import { HandoffController } from "./handoff-controller";
 import { CrawlerController } from "./crawler-controller";
 import { AiConfigController } from "./ai-config-controller";
+import { EmbeddingController } from "./embedding-controller";
 
 export class ApiRouter {
   constructor(
@@ -14,6 +15,7 @@ export class ApiRouter {
     readonly admin: AdminController,
     readonly handoff: HandoffController,
     readonly crawler: CrawlerController,
-    readonly aiConfig: AiConfigController
+    readonly aiConfig: AiConfigController,
+    readonly embedding: EmbeddingController
   ) {}
 }

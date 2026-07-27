@@ -76,7 +76,7 @@ export class AdminController {
       ]);
     }
 
-    await this.providerKeys.set(id, apiKey);
+    await this.providerKeys.set("ai", id, apiKey);
 
     return { activated: id };
   }

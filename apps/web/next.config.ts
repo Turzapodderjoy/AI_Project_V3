@@ -29,6 +29,7 @@ const nextConfig: NextConfig = {
     "@ai-chat-platform/prompt-engine",
     "@ai-chat-platform/upload",
     "@ai-chat-platform/provider-catalog",
+    "@ai-chat-platform/embedding-catalog",
     "@ai-chat-platform/tenant",
     "@ai-chat-platform/web-crawler",
     "@ai-chat-platform/ai-config",

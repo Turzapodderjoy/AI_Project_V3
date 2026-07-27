@@ -56,13 +56,25 @@ export class JsonProvider implements VectorStore {
   async search(
     embedding: number[],
     limit = 5,
-    businessId?: string
+    businessId?: string,
+    embeddingProvider?: string
   ): Promise<SearchResult[]> {
     const all = await this.read();
 
-    const records = businessId
+    let records = businessId
       ? all.filter((r) => r.metadata?.businessId === businessId)
       : all;
+
+    if (embeddingProvider) {
+      // Records indexed before this filter existed have no
+      // embeddingProvider tag at all — they were all embedded by Jina
+      // (the only provider that existed then), so untagged records must
+      // default to "jina" here or every chunk indexed before this
+      // change would silently vanish from search results.
+      records = records.filter(
+        (r) => (r.metadata?.embeddingProvider ?? "jina") === embeddingProvider
+      );
+    }
 
     if (records.length === 0) {
       return [];

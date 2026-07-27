@@ -1,24 +1,29 @@
 import { prisma } from "@ai-chat-platform/database";
 
+/** Separates AI chat providers from embedding providers — both systems
+ * can have a same-named provider (e.g. "gemini") active at once, with a
+ * different API key each, and they must never collide. */
+export type ProviderKind = "ai" | "embedding";
+
 /**
  * Durable store for API keys entered through the dashboard's "activate
  * provider" form. Without this, activation only ever patched the running
- * AIManager in memory — real, but silently gone the next time the
- * process restarts (dev server reload, redeploy, crash), which isn't
- * "plug and play" no matter how the dashboard copy reads.
+ * manager in memory — real, but silently gone the next time the process
+ * restarts (dev server reload, redeploy, crash), which isn't "plug and
+ * play" no matter how the dashboard copy reads.
  */
 export class ProviderKeyStore {
-  /** providerId -> apiKey, for every provider that's ever been
-   * activated through the dashboard. */
-  async getAll(): Promise<Record<string, string>> {
-    const rows = await prisma.providerApiKey.findMany();
+  /** providerId -> apiKey, for every provider of this kind that's ever
+   * been activated through the dashboard. */
+  async getAll(kind: ProviderKind): Promise<Record<string, string>> {
+    const rows = await prisma.providerApiKey.findMany({ where: { kind } });
     return Object.fromEntries(rows.map((r) => [r.providerId, r.apiKey]));
   }
 
-  async set(providerId: string, apiKey: string): Promise<void> {
+  async set(kind: ProviderKind, providerId: string, apiKey: string): Promise<void> {
     await prisma.providerApiKey.upsert({
-      where: { providerId },
-      create: { providerId, apiKey },
+      where: { kind_providerId: { kind, providerId } },
+      create: { kind, providerId, apiKey },
       update: { apiKey },
     });
   }

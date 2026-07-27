@@ -17,13 +17,20 @@ export class VectorStoreRetriever implements Retriever {
     query: string,
     options: RetrieveOptions = {}
   ): Promise<RetrievedChunk[]> {
-    const embedding =
-      options.embedding ?? (await this.embeddings.embed(query)).embedding;
+    let embedding = options.embedding;
+    let embeddingProvider = options.embeddingProvider;
+
+    if (!embedding) {
+      const embedded = await this.embeddings.embed(query);
+      embedding = embedded.embedding;
+      embeddingProvider = embedded.provider;
+    }
 
     const results = await this.vectorStore.search(
       embedding,
       options.limit ?? 5,
-      options.businessId
+      options.businessId,
+      embeddingProvider
     );
 
     // Cosine similarity scores are in [-1, 1], unlike the keyword

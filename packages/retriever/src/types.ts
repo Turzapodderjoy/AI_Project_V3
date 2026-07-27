@@ -22,6 +22,14 @@ export interface RetrieveOptions {
    * searches every client's knowledge base sharing the same store — a
    * real cross-tenant leak, not just noise. */
   businessId?: string;
+
+  /** Restricts retrieval to chunks embedded by the same provider as the
+   * query. Different embedding providers produce incompatible vector
+   * spaces — without this, comparing across them is either safely 0
+   * (mismatched dimensions) or a meaningless nonzero score (matching
+   * dimensions, different model). Normally left unset so the retriever
+   * derives it from whichever provider actually embedded the query. */
+  embeddingProvider?: string;
 }
 
 export interface Retriever {

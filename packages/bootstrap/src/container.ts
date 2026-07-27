@@ -20,6 +20,7 @@ import { AdminController } from "@ai-chat-platform/api";
 import { HandoffController } from "@ai-chat-platform/api";
 import { CrawlerController } from "@ai-chat-platform/api";
 import { AiConfigController } from "@ai-chat-platform/api";
+import { EmbeddingController } from "@ai-chat-platform/api";
 import { ApiRouter } from "@ai-chat-platform/api";
 
 export class Container {
@@ -62,14 +63,22 @@ export class Container {
     const rag =
       new RagService(chat);
 
+    // Shared by both upload and crawler — each used to build its own
+    // private IndexingService (and inside that, its own unconfigured
+    // EmbeddingManager), meaning uploaded/crawled documents never got
+    // the dashboard-activated/rotating embedding providers everything
+    // else uses. One instance now, wired to the real `embeddings`.
+    const indexingService =
+      new IndexingService(embeddings);
+
     const uploadService =
       new UploadService(
         new IngestionPipeline(),
-        new IndexingService()
+        indexingService
       );
 
     const crawlerService =
-      new CrawlerService();
+      new CrawlerService(indexingService);
 
     this.router =
       new ApiRouter(
@@ -89,7 +98,8 @@ export class Container {
         ),
         new HandoffController(conversations),
         new CrawlerController(crawlerService),
-        new AiConfigController(aiConfig)
+        new AiConfigController(aiConfig),
+        new EmbeddingController(embeddings, providerKeys)
       );
   }
 

@@ -55,8 +55,14 @@ function hashText(text: string): string {
 }
 
 export class CrawlerService {
-  private readonly indexing = new IndexingService();
   private readonly vectorStore = new VectorStoreManager(new JsonProvider());
+
+  // Takes the shared IndexingService (built once in bootstrap, wired to
+  // the shared rotating EmbeddingManager) instead of constructing its
+  // own — a private `new IndexingService()` here used to mean crawled
+  // pages never got the dashboard-activated/rotating embedding
+  // providers everything else uses, only a raw unconfigured Jina instance.
+  constructor(private readonly indexing: IndexingService) {}
 
   /** Creates (or re-queues) a target. Does NOT crawl — the caller runs
    * `runCrawl` separately, typically in the background, so a live

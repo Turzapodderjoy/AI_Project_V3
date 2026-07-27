@@ -94,8 +94,10 @@ export class ChatService {
       };
     }
 
-    const queryEmbedding =
-      (await this.embeddings.embed(request.message)).embedding;
+    const queryEmbeddingResult =
+      await this.embeddings.embed(request.message);
+    const queryEmbedding = queryEmbeddingResult.embedding;
+    const queryEmbeddingProvider = queryEmbeddingResult.provider;
 
     // The semantic cache only makes sense for a standalone, context-free
     // question (classic FAQ). A short follow-up like "price" is only
@@ -104,7 +106,7 @@ export class ChatService {
     // a cached answer for a completely different product.
     const cached =
       priorHistory.length === 0
-        ? this.responseCache.find(queryEmbedding, businessId)
+        ? this.responseCache.find(queryEmbedding, businessId, queryEmbeddingProvider)
         : null;
 
     if (cached) {
@@ -134,7 +136,7 @@ export class ChatService {
     const retrieved =
       await this.retriever.retrieve(
         request.message,
-        { embedding: queryEmbedding, businessId }
+        { embedding: queryEmbedding, embeddingProvider: queryEmbeddingProvider, businessId }
       );
 
     // Top retrieval score doubles as a rough "grounding confidence" for
@@ -222,7 +224,8 @@ export class ChatService {
         request.message,
         aiResponse.response,
         aiResponse.provider,
-        confidence
+        confidence,
+        queryEmbeddingProvider
       );
     }
 

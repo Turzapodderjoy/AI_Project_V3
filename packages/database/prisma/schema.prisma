@@ -150,14 +150,22 @@ model AiConfigVersion {
 // Dashboard "activate provider" keys, persisted so they survive a
 // restart — the whole point of a dashboard toggle is that it's durable,
 // not just a live in-memory patch that silently reverts to whatever's
-// in .env the next time the process restarts. One row per provider id;
-// activating again just overwrites it (upsert), no history needed here
-// unlike AiConfigVersion.
+// in .env the next time the process restarts. One row per (kind,
+// providerId); activating again just overwrites it (upsert), no history
+// needed here unlike AiConfigVersion.
+//
+// "kind" separates AI chat providers from embedding providers — both
+// systems can have a provider literally named "gemini" or "mistral" at
+// the same time (same company, different endpoint/API key), and they
+// must never collide or overwrite each other.
 model ProviderApiKey {
   id         String   @id @default(cuid())
-  providerId String   @unique
+  kind       String   @default("ai")
+  providerId String
   apiKey     String
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@unique([kind, providerId])
 }

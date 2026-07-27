@@ -139,6 +139,9 @@ importers:
       '@ai-chat-platform/database':
         specifier: workspace:*
         version: link:../database
+      '@ai-chat-platform/embedding-catalog':
+        specifier: workspace:*
+        version: link:../embedding-catalog
       '@ai-chat-platform/embedding-manager':
         specifier: workspace:*
         version: link:../embedding-manager
@@ -197,6 +200,9 @@ importers:
       '@ai-chat-platform/conversation':
         specifier: workspace:*
         version: link:../conversation
+      '@ai-chat-platform/embedding-catalog':
+        specifier: workspace:*
+        version: link:../embedding-catalog
       '@ai-chat-platform/embedding-manager':
         specifier: workspace:*
         version: link:../embedding-manager
@@ -314,7 +320,26 @@ importers:
         specifier: ^1.1.1
         version: 1.1.4
 
-  packages/embedding-manager: {}
+  packages/embedding-catalog:
+    dependencies:
+      '@ai-chat-platform/embedding-manager':
+        specifier: workspace:*
+        version: link:../embedding-manager
+      '@ai-chat-platform/gemini':
+        specifier: workspace:*
+        version: link:../gemini
+      '@ai-chat-platform/mistral':
+        specifier: workspace:*
+        version: link:../mistral
+
+  packages/embedding-manager:
+    dependencies:
+      '@ai-chat-platform/ai-manager':
+        specifier: workspace:*
+        version: link:../ai-manager
+      '@ai-chat-platform/types':
+        specifier: workspace:*
+        version: link:../types
 
   packages/eslint-config:
     devDependencies:
@@ -354,6 +379,9 @@ importers:
 
   packages/gemini:
     dependencies:
+      '@ai-chat-platform/embedding-manager':
+        specifier: workspace:^
+        version: link:../embedding-manager
       '@ai-chat-platform/types':
         specifier: workspace:^
         version: link:../types
@@ -398,6 +426,9 @@ importers:
 
   packages/mistral:
     dependencies:
+      '@ai-chat-platform/embedding-manager':
+        specifier: workspace:^
+        version: link:../embedding-manager
       '@ai-chat-platform/types':
         specifier: workspace:^
         version: link:../types

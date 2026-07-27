@@ -8,10 +8,11 @@ import { HandoffsPanel } from "../../components/HandoffsPanel";
 import { AiBrainPanel } from "../../components/AiBrainPanel";
 import { cellStyle, formatBytes } from "../../components/dashboard-styles";
 
-type Tab = "ai" | "brain" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
+type Tab = "ai" | "embedding" | "brain" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "ai", label: "AI Providers" },
+  { id: "embedding", label: "Embedding Providers" },
   { id: "brain", label: "AI Brain" },
   { id: "usage", label: "Usage" },
   { id: "clients", label: "Clients" },
@@ -55,6 +56,8 @@ interface AiUsage {
 interface EmbeddingUsage {
   [provider: string]: {
     requests: number;
+    successes: number;
+    failures: number;
     tokens: number;
   };
 }
@@ -118,6 +121,9 @@ export default function DashboardPage() {
           switching tabs never wipes a panel's local state. */}
       <div style={{ display: tab === "ai" ? "block" : "none" }}>
         <AiProvidersPanel />
+      </div>
+      <div style={{ display: tab === "embedding" ? "block" : "none" }}>
+        <EmbeddingProvidersPanel />
       </div>
       <div style={{ display: tab === "brain" ? "block" : "none" }}>
         <AiBrainPanel />
@@ -439,6 +445,182 @@ function AiProvidersPanel() {
   );
 }
 
+function EmbeddingProvidersPanel() {
+  const [data, setData] = useState<ProvidersResponse | null>(null);
+  const [selected, setSelected] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  function refresh() {
+    fetch("/api/admin/embedding-providers")
+      .then((r) => r.json())
+      .then(setData);
+  }
+
+  useEffect(refresh, []);
+
+  async function toggle(name: string, enabled: boolean) {
+    setToggling(name);
+
+    try {
+      const res = await fetch("/api/admin/embedding-providers/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: name, enabled }),
+      });
+
+      if (res.ok) {
+        refresh();
+      } else {
+        const result = await res.json();
+        setMessage(`Error: ${result.error}`);
+      }
+    } finally {
+      setToggling(null);
+    }
+  }
+
+  useEffect(() => {
+    const first = data?.catalog.available[0];
+    if (first && !selected) {
+      setSelected(first.id);
+    }
+  }, [data, selected]);
+
+  async function activate() {
+    if (!selected || !apiKey.trim()) return;
+    setSaving(true);
+    setMessage("");
+
+    try {
+      const res = await fetch("/api/admin/embedding-providers/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selected, apiKey }),
+      });
+      const result = await res.json();
+
+      setMessage(
+        res.ok
+          ? `Activated "${result.activated}" — live now, and saved permanently (survives restarts).`
+          : `Error: ${result.error}`
+      );
+
+      if (res.ok) {
+        setApiKey("");
+        refresh();
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section>
+      <h2>Embedding Providers</h2>
+      <p style={{ opacity: 0.6 }}>
+        The same rotation/failover the AI Providers panel does for chat
+        replies, but for the embedding step that runs before every
+        retrieval and every document upload. Turn a provider on/off to
+        experiment — disable the others to force every embedding call
+        through one specific provider, or disable one to see the rest
+        pick up its traffic. Takes effect on the very next call, no
+        restart.
+      </p>
+
+      {!data && <p>Loading…</p>}
+
+      {data && (
+        <>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={cellStyle}>Provider</th>
+                <th style={cellStyle}>Enabled</th>
+                <th style={cellStyle}>Healthy</th>
+                <th style={cellStyle}>Has API key</th>
+                <th style={cellStyle}>API key</th>
+                <th style={cellStyle}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.status.map((p) => (
+                <tr key={p.name}>
+                  <td style={cellStyle}>{p.name}</td>
+                  <td style={cellStyle}>{p.enabled ? "🟢 On" : "⚪ Off"}</td>
+                  <td style={cellStyle}>{p.healthy ? "✅" : "❌"}</td>
+                  <td style={cellStyle}>{p.hasUsableKey ? "✅" : "❌"}</td>
+                  <td style={cellStyle}>
+                    <code style={{ fontSize: 12 }}>{p.maskedKey ?? "—"}</code>
+                  </td>
+                  <td style={cellStyle}>
+                    <button
+                      onClick={() => toggle(p.name, !p.enabled)}
+                      disabled={toggling === p.name}
+                    >
+                      {toggling === p.name ? "…" : p.enabled ? "Turn off" : "Turn on"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {data.status.length === 0 && (
+                <tr>
+                  <td style={cellStyle} colSpan={6}>
+                    No embedding providers active yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          <h3 style={{ marginTop: 24 }}>Add / activate a provider</h3>
+          <p style={{ opacity: 0.6 }}>
+            Only providers with a real, coded adapter can be activated —
+            picking one just needs an API key, no redeploy or code change.
+            Planned but not-yet-coded providers are listed below for
+            visibility.
+          </p>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value={selected}
+              onChange={(e) => setSelected(e.target.value)}
+              style={{ padding: 8 }}
+            >
+              {data.catalog.available.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <input
+              style={{ padding: 8, flex: 1, minWidth: 200 }}
+              placeholder="API key"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+            <button onClick={activate} disabled={saving}>
+              {saving ? "Saving…" : "Activate"}
+            </button>
+          </div>
+
+          {message && <p style={{ fontSize: 13, opacity: 0.8 }}>{message}</p>}
+
+          <p style={{ opacity: 0.5, fontSize: 12, marginTop: 12 }}>
+            Not implemented yet: {data.catalog.planned.map((p) => p.label).join(", ")}.
+            Each needs its adapter written once (implements the same
+            EmbeddingProvider interface as Jina) before it can be
+            activated here.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
 function UsagePanel() {
   const [aiUsage, setAiUsage] = useState<AiUsage | null>(null);
   const [embeddingUsage, setEmbeddingUsage] = useState<EmbeddingUsage | null>(null);
@@ -547,7 +729,7 @@ function UsagePanel() {
         </table>
       )}
 
-      <h3 style={{ marginTop: 24 }}>Embeddings (Jina, etc.)</h3>
+      <h3 style={{ marginTop: 24 }}>Embedding providers (totals)</h3>
       {!embeddingUsage && <p>Loading…</p>}
       {embeddingUsage && (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -555,6 +737,8 @@ function UsagePanel() {
             <tr>
               <th style={cellStyle}>Provider</th>
               <th style={cellStyle}>Requests</th>
+              <th style={cellStyle}>Successes</th>
+              <th style={cellStyle}>Failures</th>
               <th style={cellStyle}>Tokens</th>
             </tr>
           </thead>
@@ -563,12 +747,14 @@ function UsagePanel() {
               <tr key={name}>
                 <td style={cellStyle}>{name}</td>
                 <td style={cellStyle}>{stats.requests}</td>
+                <td style={cellStyle}>{stats.successes}</td>
+                <td style={cellStyle}>{stats.failures}</td>
                 <td style={cellStyle}>{stats.tokens}</td>
               </tr>
             ))}
             {Object.keys(embeddingUsage).length === 0 && (
               <tr>
-                <td style={cellStyle} colSpan={3}>
+                <td style={cellStyle} colSpan={5}>
                   No embedding calls yet — upload a document or ask a
                   question (retrieval embeds the query too).
                 </td>

@@ -3,6 +3,7 @@ import type {
   EmbeddingResult,
 } from "../types";
 import { retryOn429 } from "../retry";
+import { InvalidApiKeyError, RateLimitedError } from "@ai-chat-platform/types";
 
 interface JinaEmbeddingItem {
   embedding: number[];
@@ -16,27 +17,14 @@ interface JinaEmbeddingResponse {
 export class JinaProvider implements EmbeddingProvider {
   readonly name = "jina";
 
-  private readonly apiKey: string;
-
-  constructor(apiKey?: string) {
-    this.apiKey =
-      apiKey ??
-      process.env.JINA_API_KEY ??
-      "";
-
-    if (!this.apiKey) {
-      throw new Error("JINA_API_KEY is missing.");
-    }
-  }
-
-  private async callApi(input: string[]): Promise<JinaEmbeddingResponse> {
+  private async callApi(input: string[], apiKey: string): Promise<JinaEmbeddingResponse> {
     return retryOn429(async () => {
       const response = await fetch(
         "https://api.jina.ai/v1/embeddings",
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${this.apiKey}`,
+            Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -47,17 +35,33 @@ export class JinaProvider implements EmbeddingProvider {
       );
 
       if (!response.ok) {
-        throw new Error(
-          `Jina API Error: ${response.status} ${response.statusText}`
-        );
+        // Must throw the typed errors (not just a plain Error) so
+        // EmbeddingManager's key-health/failover logic — which only
+        // runs in its catch block — actually fires, same reasoning as
+        // every AIProvider in packages/{groq,gemini,openrouter,...}.
+        const message = `Jina API Error: ${response.status} ${response.statusText}`;
+
+        if (response.status === 401 || response.status === 403) {
+          throw new InvalidApiKeyError(message);
+        }
+
+        if (response.status === 429) {
+          throw new RateLimitedError(message);
+        }
+
+        throw new Error(message);
       }
 
       return response.json() as Promise<JinaEmbeddingResponse>;
     });
   }
 
-  async embed(text: string): Promise<EmbeddingResult> {
-    const json = await this.callApi([text]);
+  async embed(text: string, apiKey?: string): Promise<EmbeddingResult> {
+    if (!apiKey) {
+      throw new Error("No API key provided");
+    }
+
+    const json = await this.callApi([text], apiKey);
 
     if (!json.data || json.data.length === 0) {
       throw new Error("Jina returned no embeddings.");
@@ -78,9 +82,14 @@ export class JinaProvider implements EmbeddingProvider {
   }
 
   async embedMany(
-    texts: string[]
+    texts: string[],
+    apiKey?: string
   ): Promise<EmbeddingResult[]> {
-    const json = await this.callApi(texts);
+    if (!apiKey) {
+      throw new Error("No API key provided");
+    }
+
+    const json = await this.callApi(texts, apiKey);
 
     if (!json.data || json.data.length === 0) {
       throw new Error("Jina returned no embeddings.");
@@ -96,5 +105,9 @@ export class JinaProvider implements EmbeddingProvider {
       dimensions: item.embedding.length,
       tokens: tokensPerItem,
     }));
+  }
+
+  async health(): Promise<boolean> {
+    return true;
   }
 }

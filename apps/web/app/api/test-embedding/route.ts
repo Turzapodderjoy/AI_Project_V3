@@ -25,7 +25,9 @@ export async function GET() {
   try {
     const manager = new EmbeddingManager();
 
-    manager.register(new JinaProvider());
+    manager.registerProvider(new JinaProvider(), [
+      { id: "jina-test", value: process.env.JINA_API_KEY ?? "" },
+    ]);
 
     const result = await manager.embed(
       "Hello from AI Chat Platform"

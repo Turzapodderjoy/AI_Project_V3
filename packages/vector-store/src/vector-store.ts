@@ -20,12 +20,14 @@ export class VectorStoreManager {
   async search(
     embedding: number[],
     limit = 5,
-    businessId?: string
+    businessId?: string,
+    embeddingProvider?: string
   ): Promise<SearchResult[]> {
     return this.provider.search(
       embedding,
       limit,
-      businessId
+      businessId,
+      embeddingProvider
     );
   }
 

@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 
 import { IndexingService } from "@ai-chat-platform/indexing";
+import { EmbeddingManager, JinaProvider } from "@ai-chat-platform/embedding-manager";
 
 export async function GET() {
   try {
-    const indexing = new IndexingService();
+    const embeddings = new EmbeddingManager();
+    embeddings.registerProvider(new JinaProvider(), [
+      { id: "jina-test", value: process.env.JINA_API_KEY ?? "" },
+    ]);
+
+    const indexing = new IndexingService(embeddings);
 
     await indexing.initialize();
 

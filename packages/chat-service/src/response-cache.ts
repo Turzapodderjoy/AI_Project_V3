@@ -11,6 +11,7 @@ export interface CachedAnswer {
 interface CacheEntry extends CachedAnswer {
   embedding: number[];
   businessId: string;
+  embeddingProvider: string;
 }
 
 /**
@@ -18,9 +19,12 @@ interface CacheEntry extends CachedAnswer {
  * already answered (high embedding cosine similarity, not exact string
  * match — so paraphrases hit too) reuses the stored answer instead of
  * spending LLM tokens on it again. Scoped per business — without that, a
- * cached answer from one client could be served to another. In-memory
- * only, same caveat as the other trackers: move to Postgres once
- * conversations are persisted.
+ * cached answer from one client could be served to another. Also scoped
+ * per embeddingProvider — same reasoning as VectorStore.search(): two
+ * different embedding providers produce incompatible vector spaces, so a
+ * "similarity" score between them isn't a valid signal at all, matching-
+ * dimension coincidences included. In-memory only, same caveat as the
+ * other trackers: move to Postgres once conversations are persisted.
  */
 export class ResponseCache {
   private readonly entries: CacheEntry[] = [];
@@ -30,11 +34,11 @@ export class ResponseCache {
     private readonly maxEntries = 500
   ) {}
 
-  find(embedding: number[], businessId: string): CachedAnswer | null {
+  find(embedding: number[], businessId: string, embeddingProvider: string): CachedAnswer | null {
     let best: { entry: CacheEntry; score: number } | null = null;
 
     for (const entry of this.entries) {
-      if (entry.businessId !== businessId) {
+      if (entry.businessId !== businessId || entry.embeddingProvider !== embeddingProvider) {
         continue;
       }
 
@@ -59,11 +63,13 @@ export class ResponseCache {
     question: string,
     answer: string,
     provider: string,
-    confidence: number
+    confidence: number,
+    embeddingProvider: string
   ): void {
     this.entries.push({
       embedding,
       businessId,
+      embeddingProvider,
       question,
       answer,
       provider,

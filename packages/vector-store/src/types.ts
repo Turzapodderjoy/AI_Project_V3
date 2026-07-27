@@ -23,11 +23,23 @@ export interface VectorStore {
 
   /** businessId restricts the search to one client's records — omitting
    * it searches every client sharing this store, which is almost never
-   * what a chat request wants. */
+   * what a chat request wants.
+   *
+   * embeddingProvider restricts the comparison to records embedded by
+   * the SAME provider as the query. Different embedding providers/models
+   * produce vectors in different, mutually incomparable spaces — cosine
+   * similarity between them is either safely 0 (different dimensions,
+   * e.g. Gemini's 3072 vs Jina's 1024) or, worse, a meaningless nonzero
+   * number when dimensions happen to coincide (e.g. Jina vs Mistral,
+   * both 1024) without the vectors meaning the same thing at all.
+   * Omitting it searches across every provider's records, which is
+   * almost never what a real query wants once more than one embedding
+   * provider is active. */
   search(
     embedding: number[],
     limit?: number,
-    businessId?: string
+    businessId?: string,
+    embeddingProvider?: string
   ): Promise<SearchResult[]>;
 
   listAll(): Promise<VectorRecord[]>;

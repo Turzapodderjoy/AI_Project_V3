@@ -1,8 +1,5 @@
 import { Chunker } from "@ai-chat-platform/chunker";
-import {
-  EmbeddingManager,
-  JinaProvider,
-} from "@ai-chat-platform/embedding-manager";
+import type { EmbeddingManager } from "@ai-chat-platform/embedding-manager";
 
 import {
   JsonProvider,
@@ -15,9 +12,6 @@ import type {
 } from "./types";
 
 export class IndexingService {
-  private readonly embeddingManager =
-    new EmbeddingManager();
-
   private readonly vectorStore =
     new VectorStoreManager(
       new JsonProvider()
@@ -26,11 +20,12 @@ export class IndexingService {
   private readonly chunker =
     new Chunker();
 
-  constructor() {
-    this.embeddingManager.register(
-      new JinaProvider()
-    );
-  }
+  // Takes the shared, already-registered EmbeddingManager (built once in
+  // bootstrap/create-app.ts) instead of constructing its own — a private
+  // `new EmbeddingManager()` here used to mean document uploads never
+  // got the dashboard-activated/rotating embedding providers everything
+  // else uses, only a raw unconfigured Jina instance.
+  constructor(private readonly embeddingManager: EmbeddingManager) {}
 
   async initialize(): Promise<void> {
     await this.vectorStore.initialize();
@@ -78,6 +73,14 @@ export class IndexingService {
           chunk.endOffset,
         tokenEstimate:
           chunk.tokenEstimate,
+        // Tags which embedding provider produced this vector — required
+        // so retrieval only ever compares vectors from the same space
+        // (see json-provider.ts's search()). Different chunks of the
+        // same document can end up with different providers if a
+        // rotation happened mid-upload; that's fine, each is tagged
+        // with what actually embedded it.
+        embeddingProvider:
+          embeddings[i]!.provider,
         ...(request.metadata ?? {})
       }
     }));
