@@ -20,6 +20,14 @@ export class ProviderUnavailableError extends AIManagerError {}
 
 export class AllProvidersFailedError extends AIManagerError {
   constructor(public readonly failures: Error[]) {
-    super("All AI providers failed.");
+    // Individual failure reasons used to be swallowed (only available on
+    // the .failures array, which nothing surfaced to callers) — folding
+    // them into the message means the real per-provider errors actually
+    // reach API responses/logs instead of a useless generic string.
+    super(
+      failures.length === 0
+        ? "All AI providers failed."
+        : `All AI providers failed: ${failures.map((f) => f.message).join(" | ")}`
+    );
   }
 }

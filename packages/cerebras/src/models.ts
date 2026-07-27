@@ -1,13 +1,17 @@
-// UNVERIFIED — written without a live API key (none was available at
-// implementation time). Cerebras' free-tier model catalog is known to be
-// volatile (it reportedly collapsed from ~12 models to 2 within 2026), so
-// this MUST be confirmed against a real `GET /v1/models` call the first
-// time a real CEREBRAS_API_KEY is added, the same way gemini/openrouter's
-// first-picked defaults both turned out to be retired and had to be
-// swapped after a direct curl check (see packages/gemini, packages/openrouter).
-export const DEFAULT_MODEL = "llama-3.3-70b";
+// Verified against a real key's GET /v1/models on 2026-07-28 — the
+// original guess ("llama-3.3-70b") isn't in this account's catalog at
+// all, confirming the "volatile free model list" warning from research.
+//
+// IMPORTANT: all three models below currently return HTTP 402 "Payment
+// required" on this account, even though Cerebras advertises a free,
+// no-card tier — the account needs billing/verification sorted on
+// Cerebras' side before any of these will actually work. Re-test with a
+// direct curl once that's resolved; don't assume this list is still
+// current either, given how fast it already changed once.
+export const DEFAULT_MODEL = "zai-glm-4.7";
 
 export const MODELS = [
-  "llama-3.3-70b",
-  "llama3.1-8b",
+  "zai-glm-4.7",
+  "gpt-oss-120b",
+  "gemma-4-31b",
 ];

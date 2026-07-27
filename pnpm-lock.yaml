@@ -145,6 +145,9 @@ importers:
       '@ai-chat-platform/provider-catalog':
         specifier: workspace:*
         version: link:../provider-catalog
+      '@ai-chat-platform/provider-keys':
+        specifier: workspace:*
+        version: link:../provider-keys
       '@ai-chat-platform/rag':
         specifier: workspace:*
         version: link:../rag
@@ -212,6 +215,9 @@ importers:
       '@ai-chat-platform/provider-catalog':
         specifier: workspace:*
         version: link:../provider-catalog
+      '@ai-chat-platform/provider-keys':
+        specifier: workspace:*
+        version: link:../provider-keys
       '@ai-chat-platform/rag':
         specifier: workspace:*
         version: link:../rag
@@ -428,6 +434,12 @@ importers:
       '@ai-chat-platform/types':
         specifier: workspace:*
         version: link:../types
+
+  packages/provider-keys:
+    dependencies:
+      '@ai-chat-platform/database':
+        specifier: workspace:*
+        version: link:../database
 
   packages/provider-orchestrator:
     dependencies:

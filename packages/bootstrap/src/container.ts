@@ -4,6 +4,7 @@ import { ConversationService } from "@ai-chat-platform/conversation";
 import type { Retriever } from "@ai-chat-platform/retriever";
 import type { VectorStoreManager } from "@ai-chat-platform/vector-store";
 import type { EmbeddingManager } from "@ai-chat-platform/embedding-manager";
+import type { ProviderKeyStore } from "@ai-chat-platform/provider-keys";
 import { ChatService, ChatUsageLog, ResponseCache } from "@ai-chat-platform/chat-service";
 import { AiConfigService } from "@ai-chat-platform/ai-config";
 import { RagService } from "@ai-chat-platform/rag";
@@ -21,14 +22,14 @@ import { CrawlerController } from "@ai-chat-platform/api";
 import { AiConfigController } from "@ai-chat-platform/api";
 import { ApiRouter } from "@ai-chat-platform/api";
 
-import { registerProviders } from "./register-providers";
-
 export class Container {
 
   constructor(
     retriever: Retriever,
     vectorStore: VectorStoreManager,
-    embeddings: EmbeddingManager
+    embeddings: EmbeddingManager,
+    ai: AIManager,
+    providerKeys: ProviderKeyStore
   ) {
 
     const conversations =
@@ -36,11 +37,6 @@ export class Container {
 
     const prompts =
       new PromptEngine();
-
-    const ai =
-      new AIManager();
-
-    registerProviders(ai);
 
     const chatUsageLog =
       new ChatUsageLog();
@@ -88,7 +84,8 @@ export class Container {
           responseCache,
           new TenantService(),
           conversations,
-          crawlerService
+          crawlerService,
+          providerKeys
         ),
         new HandoffController(conversations),
         new CrawlerController(crawlerService),

@@ -6,6 +6,7 @@ import { PROVIDER_CATALOG, PLANNED_PROVIDERS } from "@ai-chat-platform/provider-
 import { TenantService } from "@ai-chat-platform/tenant";
 import { ConversationService } from "@ai-chat-platform/conversation";
 import { CrawlerService } from "@ai-chat-platform/web-crawler";
+import { ProviderKeyStore } from "@ai-chat-platform/provider-keys";
 import { prisma } from "@ai-chat-platform/database";
 
 export interface KnowledgeDocumentSummary {
@@ -26,7 +27,8 @@ export class AdminController {
     private readonly responseCache: ResponseCache,
     private readonly tenants: TenantService,
     private readonly conversations: ConversationService,
-    private readonly crawler: CrawlerService
+    private readonly crawler: CrawlerService,
+    private readonly providerKeys: ProviderKeyStore
   ) {}
 
   providers() {
@@ -47,8 +49,13 @@ export class AdminController {
     };
   }
 
-  /** Registers (or re-keys) a provider at runtime — no restart needed. */
-  activateProvider(id: string, apiKey: string): { activated: string } {
+  /** Registers (or re-keys) a provider at runtime — no restart needed —
+   * AND persists the key to Postgres so it survives one. Without the
+   * persistence half, "activate" was only ever a live patch to the
+   * in-memory AIManager that silently reverted to whatever .env said
+   * the next time the process restarted, which isn't actually
+   * plug-and-play no matter what the dashboard copy claims. */
+  async activateProvider(id: string, apiKey: string): Promise<{ activated: string }> {
     const entry = PROVIDER_CATALOG.find((e) => e.id === id);
 
     if (!entry) {
@@ -68,6 +75,8 @@ export class AdminController {
         { id: `${id}-ui`, value: apiKey },
       ]);
     }
+
+    await this.providerKeys.set(id, apiKey);
 
     return { activated: id };
   }

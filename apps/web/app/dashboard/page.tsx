@@ -326,7 +326,7 @@ function AiProvidersPanel() {
 
       setMessage(
         res.ok
-          ? `Activated "${result.activated}". In-memory only for now — resets on restart until keys move to persisted config.`
+          ? `Activated "${result.activated}" — live now, and saved permanently (survives restarts).`
           : `Error: ${result.error}`
       );
 
