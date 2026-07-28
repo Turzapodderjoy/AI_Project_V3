@@ -11,4 +11,5 @@ export interface AskResponse {
   confidence: number;
   cached?: boolean;
   handoff?: boolean;
+  messageId?: string;
 }

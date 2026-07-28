@@ -50,7 +50,7 @@ export class ChatAnalysisService {
    * they're skipped (with a lightweight, no-LLM-call ChatAnalysis row)
    * so they don't get rescanned by every future run forever. */
   async unprocessedConversations(limit: number): Promise<
-    Array<{ id: string; businessId: string; messages: { role: string; content: string }[] }>
+    Array<{ id: string; businessId: string; messages: { id: string; role: string; content: string }[] }>
   > {
     const PAGE_SIZE = 50;
     const MAX_PAGES = 10; // caps a single cron run's scan at 500 conversations
@@ -58,7 +58,7 @@ export class ChatAnalysisService {
     const qualifying: Array<{
       id: string;
       businessId: string;
-      messages: { role: string; content: string }[];
+      messages: { id: string; role: string; content: string }[];
     }> = [];
 
     for (let page = 0; page < MAX_PAGES && qualifying.length < limit; page++) {
@@ -79,11 +79,24 @@ export class ChatAnalysisService {
       }
 
       for (const c of conversations) {
-        if (c.messages.length >= 3) {
+        // A 1-2 message exchange is normally skipped as too short to
+        // learn from — but an admin QA'ing exactly that exchange in the
+        // Chat Demo tab (one question, one answer, one Pass/Fail click)
+        // is exactly a 2-message conversation, and that explicit human
+        // judgment is too valuable a signal to auto-skip before the
+        // reasoning LLM ever sees it.
+        const hasFeedback =
+          c.messages.length > 0 &&
+          (await prisma.messageFeedback.findFirst({
+            where: { messageId: { in: c.messages.map((m) => m.id) } },
+            select: { id: true },
+          })) !== null;
+
+        if (c.messages.length >= 3 || hasFeedback) {
           qualifying.push({
             id: c.id,
             businessId: c.businessId,
-            messages: c.messages.map((m) => ({ role: m.role, content: m.content })),
+            messages: c.messages.map((m) => ({ id: m.id, role: m.role, content: m.content })),
           });
         } else {
           // Marked processed immediately (not left for the LLM) — a

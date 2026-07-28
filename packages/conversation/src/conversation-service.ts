@@ -59,14 +59,18 @@ export class ConversationService {
     return row ? toRecord(row) : null;
   }
 
+  /** Returns the created row's id — callers that record an assistant
+   * reply (ChatService) thread this back to the client so the Chat Demo
+   * tab's QA pass/fail buttons can attach feedback to the exact message. */
   async addMessage(
     sessionId: string,
     role: ConversationMessage["role"],
     content: string
-  ): Promise<void> {
-    await prisma.message.create({
+  ): Promise<{ id: string }> {
+    const created = await prisma.message.create({
       data: { conversationId: sessionId, role, content },
     });
+    return { id: created.id };
   }
 
   async history(
@@ -80,6 +84,7 @@ export class ConversationService {
     });
 
     return rows.map((row) => ({
+      id: row.id,
       role: row.role as ConversationMessage["role"],
       content: row.content,
       createdAt: row.createdAt,

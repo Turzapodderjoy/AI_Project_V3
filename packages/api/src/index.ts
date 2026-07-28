@@ -9,3 +9,4 @@ export * from "./ai-config-controller";
 export * from "./embedding-controller";
 export * from "./training-controller";
 export * from "./channel-controller";
+export * from "./feedback-controller";

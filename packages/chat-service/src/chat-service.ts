@@ -110,7 +110,7 @@ export class ChatService {
         : null;
 
     if (cached) {
-      await this.conversations.addMessage(
+      const savedMessage = await this.conversations.addMessage(
         request.sessionId,
         "assistant",
         cached.answer
@@ -130,6 +130,7 @@ export class ChatService {
         tokens: 0,
         confidence: cached.confidence,
         cached: true,
+        messageId: savedMessage.id,
       };
     }
 
@@ -148,7 +149,7 @@ export class ChatService {
     if (confidence < config.handoffFloor) {
       const fullHistory = [
         ...priorHistory,
-        { role: "user" as const, content: request.message, createdAt: new Date() },
+        { id: "pending", role: "user" as const, content: request.message, createdAt: new Date() },
       ];
       const summary = await this.buildHandoffSummary(fullHistory);
       await this.conversations.requestHandoff(
@@ -161,7 +162,7 @@ export class ChatService {
         ? HANDOFF_MESSAGE_BN
         : HANDOFF_MESSAGE_EN;
 
-      await this.conversations.addMessage(
+      const savedMessage = await this.conversations.addMessage(
         request.sessionId,
         "assistant",
         handoffMessage
@@ -181,6 +182,7 @@ export class ChatService {
         tokens: 0,
         confidence,
         handoff: true,
+        messageId: savedMessage.id,
       };
     }
 
@@ -201,7 +203,7 @@ export class ChatService {
         config.temperature
       );
 
-    await this.conversations.addMessage(
+    const savedMessage = await this.conversations.addMessage(
       request.sessionId,
       "assistant",
       aiResponse.response
@@ -234,6 +236,7 @@ export class ChatService {
       provider: aiResponse.provider,
       tokens: aiResponse.tokens,
       confidence,
+      messageId: savedMessage.id,
     };
   }
 

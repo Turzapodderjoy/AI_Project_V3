@@ -9,6 +9,17 @@ interface Message {
   tokens?: number;
   confidence?: number;
   cached?: boolean;
+  /** The persisted assistant Message's id — absent for the "waiting on a
+   * human agent" notice and for client-side error messages, neither of
+   * which is a real recorded answer worth QA'ing. */
+  messageId?: string;
+}
+
+interface QaState {
+  verdict: "pass" | "fail" | null;
+  note: string;
+  saving: boolean;
+  saved: boolean;
 }
 
 function sessionKey(businessId: string): string {
@@ -34,6 +45,7 @@ export function ChatWidget({ businessId = "default" }: { businessId?: string }) 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [waitingForAgent, setWaitingForAgent] = useState(false);
+  const [qa, setQa] = useState<Record<string, QaState>>({});
   const seenCount = useRef(0);
 
   useEffect(() => {
@@ -98,6 +110,7 @@ export function ChatWidget({ businessId = "default" }: { businessId?: string }) 
               tokens: data.tokens,
               confidence: data.confidence,
               cached: data.cached,
+              messageId: data.messageId,
             }
           : { role: "assistant", content: `Error: ${data.detail ?? data.error}` },
       ]);
@@ -116,7 +129,27 @@ export function ChatWidget({ businessId = "default" }: { businessId?: string }) 
     setSessionId(getSessionId(businessId));
     setMessages([]);
     setWaitingForAgent(false);
+    setQa({});
     seenCount.current = 0;
+  }
+
+  async function submitQa(messageId: string, verdict: "pass" | "fail", note: string) {
+    setQa((prev) => ({ ...prev, [messageId]: { verdict, note, saving: true, saved: false } }));
+
+    try {
+      const res = await fetch("/api/chat/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId, businessId, verdict, note }),
+      });
+
+      setQa((prev) => ({
+        ...prev,
+        [messageId]: { verdict, note, saving: false, saved: res.ok },
+      }));
+    } catch {
+      setQa((prev) => ({ ...prev, [messageId]: { verdict, note, saving: false, saved: false } }));
+    }
   }
 
   return (
@@ -146,28 +179,86 @@ export function ChatWidget({ businessId = "default" }: { businessId?: string }) 
       >
         {messages.length === 0 && (
           <p style={{ opacity: 0.6 }}>
-            Upload a document, then ask a question about it here.
+            Upload a document, then ask a question about it here. Every
+            answer gets a QA pass/fail button below it — use it to flag
+            good and bad answers for the training pipeline.
           </p>
         )}
 
-        {messages.map((m, i) => (
-          <div key={i}>
-            <div>
-              <strong>
-                {m.role === "user" ? "You" : m.role === "agent" ? "Agent" : "Assistant"}:
-              </strong>{" "}
-              {m.content}
-            </div>
-            {m.role === "assistant" && m.provider && (
-              <div style={{ fontSize: 11, opacity: 0.5 }}>
-                {m.provider}
-                {m.cached && " (cached, 0 tokens)"} ·{" "}
-                {Math.round((m.confidence ?? 0) * 100)}% confidence ·{" "}
-                {m.tokens} tokens
+        {messages.map((m, i) => {
+          const state = m.messageId ? qa[m.messageId] : undefined;
+
+          return (
+            <div key={i}>
+              <div>
+                <strong>
+                  {m.role === "user" ? "You" : m.role === "agent" ? "Agent" : "Assistant"}:
+                </strong>{" "}
+                {m.content}
               </div>
-            )}
-          </div>
-        ))}
+              {m.role === "assistant" && m.provider && (
+                <div style={{ fontSize: 11, opacity: 0.5 }}>
+                  {m.provider}
+                  {m.cached && " (cached, 0 tokens)"} ·{" "}
+                  {Math.round((m.confidence ?? 0) * 100)}% confidence ·{" "}
+                  {m.tokens} tokens
+                </div>
+              )}
+
+              {m.role === "assistant" && m.messageId && (
+                <div style={{ marginTop: 4, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => submitQa(m.messageId!, "pass", state?.note ?? "")}
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      background: state?.verdict === "pass" ? "#1a5" : "transparent",
+                      color: state?.verdict === "pass" ? "#fff" : "inherit",
+                      border: "1px solid #1a5",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ✓ Pass
+                  </button>
+                  <button
+                    onClick={() => submitQa(m.messageId!, "fail", state?.note ?? "")}
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      background: state?.verdict === "fail" ? "#c33" : "transparent",
+                      color: state?.verdict === "fail" ? "#fff" : "inherit",
+                      border: "1px solid #c33",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ✗ Fail
+                  </button>
+                  {state?.verdict && (
+                    <input
+                      placeholder="Why? (optional — feeds the training pipeline)"
+                      defaultValue={state.note}
+                      onBlur={(e) => {
+                        if (e.target.value !== state.note) {
+                          submitQa(m.messageId!, state.verdict!, e.target.value);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      }}
+                      style={{ fontSize: 11, padding: "3px 6px", flex: 1, minWidth: 160 }}
+                    />
+                  )}
+                  {state?.saving && <span style={{ fontSize: 11, opacity: 0.5 }}>Saving…</span>}
+                  {state?.saved && !state.saving && (
+                    <span style={{ fontSize: 11, opacity: 0.5 }}>Saved ✓</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
 
         {loading && <div style={{ opacity: 0.6 }}>Thinking…</div>}
       </div>

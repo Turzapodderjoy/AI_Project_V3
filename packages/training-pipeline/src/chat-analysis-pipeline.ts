@@ -5,6 +5,7 @@ import { ChatAnalysisService } from "./chat-analysis-service";
 import { ReasoningClient } from "./reasoning-client";
 import { CHAT_ANALYSIS_SYSTEM_PROMPT, buildChatAnalysisUserPrompt } from "./system-prompt";
 import type { AiConfigService } from "@ai-chat-platform/ai-config";
+import type { MessageFeedbackService } from "@ai-chat-platform/conversation";
 
 interface RawAnalysisResponse {
   verdict?: string;
@@ -41,7 +42,8 @@ export class ChatAnalysisPipeline {
   constructor(
     private readonly analysis: ChatAnalysisService,
     private readonly reasoning: ReasoningClient,
-    private readonly aiConfig: AiConfigService
+    private readonly aiConfig: AiConfigService,
+    private readonly messageFeedback: MessageFeedbackService
   ) {}
 
   async run(batchSize = DEFAULT_BATCH_SIZE): Promise<{
@@ -84,11 +86,26 @@ export class ChatAnalysisPipeline {
   private async analyzeOne(conversation: {
     id: string;
     businessId: string;
-    messages: { role: string; content: string }[];
+    messages: { id: string; role: string; content: string }[];
   }): Promise<string> {
     const aiConfig = await this.aiConfig.getCurrent(conversation.businessId);
+
+    const feedbackByMessageId = await this.messageFeedback.forMessageIds(
+      conversation.messages.map((m) => m.id)
+    );
+
     const transcript = conversation.messages
-      .map((m) => `${m.role}: ${m.content}`)
+      .map((m) => {
+        const feedback = feedbackByMessageId.get(m.id);
+        if (!feedback) return `${m.role}: ${m.content}`;
+
+        const annotation =
+          feedback.verdict === "fail"
+            ? `[Human QA: FAIL${feedback.note ? ` — ${feedback.note}` : ""}]`
+            : "[Human QA: PASS]";
+
+        return `${m.role}: ${m.content} ${annotation}`;
+      })
       .join("\n");
 
     const userPrompt = buildChatAnalysisUserPrompt({

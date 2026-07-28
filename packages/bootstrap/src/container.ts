@@ -1,6 +1,6 @@
 import { AIManager } from "@ai-chat-platform/ai-manager";
 import { PromptEngine } from "@ai-chat-platform/prompt-engine";
-import { ConversationService } from "@ai-chat-platform/conversation";
+import { ConversationService, MessageFeedbackService } from "@ai-chat-platform/conversation";
 import type { Retriever } from "@ai-chat-platform/retriever";
 import type { VectorStoreManager } from "@ai-chat-platform/vector-store";
 import type { EmbeddingManager } from "@ai-chat-platform/embedding-manager";
@@ -30,6 +30,7 @@ import { AiConfigController } from "@ai-chat-platform/api";
 import { EmbeddingController } from "@ai-chat-platform/api";
 import { TrainingController } from "@ai-chat-platform/api";
 import { ChannelController } from "@ai-chat-platform/api";
+import { FeedbackController } from "@ai-chat-platform/api";
 import { ApiRouter } from "@ai-chat-platform/api";
 
 export class Container {
@@ -102,11 +103,15 @@ export class Container {
     const chatAnalysisService =
       new ChatAnalysisService();
 
+    const messageFeedback =
+      new MessageFeedbackService();
+
     const chatAnalysisPipeline =
       new ChatAnalysisPipeline(
         chatAnalysisService,
         reasoningClient,
-        aiConfig
+        aiConfig,
+        messageFeedback
       );
 
     const promptSuggestionService =
@@ -141,7 +146,7 @@ export class Container {
         ),
         new HandoffController(conversations),
         new CrawlerController(crawlerService),
-        new AiConfigController(aiConfig),
+        new AiConfigController(aiConfig, tenants),
         new EmbeddingController(embeddings, providerKeys, indexingService),
         new TrainingController(
           chatAnalysisService,
@@ -153,7 +158,8 @@ export class Container {
           channelConnections,
           channelAppCredentials,
           rag
-        )
+        ),
+        new FeedbackController(messageFeedback)
       );
   }
 

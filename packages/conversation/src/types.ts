@@ -1,6 +1,7 @@
 export type HandoffStatus = "bot" | "pending" | "human";
 
 export interface ConversationMessage {
+  id: string;
   role: "system" | "user" | "assistant" | "agent";
   content: string;
   createdAt: Date;

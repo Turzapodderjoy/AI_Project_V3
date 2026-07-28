@@ -1,8 +1,10 @@
 import { AiConfigService, PLATFORM_CONFIG_ID } from "@ai-chat-platform/ai-config";
+import type { TenantService } from "@ai-chat-platform/tenant";
 
 export class AiConfigController {
   constructor(
-    private readonly aiConfig: AiConfigService
+    private readonly aiConfig: AiConfigService,
+    private readonly tenants: TenantService
   ) {}
 
   current(businessId: string = PLATFORM_CONFIG_ID) {
@@ -46,5 +48,26 @@ export class AiConfigController {
     }
 
     return this.aiConfig.append(businessId, additionalText, note);
+  }
+
+  /** Appends a rule to the platform default AND every existing client's
+   * own current prompt — for policy rules that must apply everywhere
+   * immediately, not just to clients who haven't customized their prompt
+   * yet (append() alone only reaches whichever single businessId you
+   * pass it). Each business gets its own new AiConfigVersion, same as a
+   * manual edit — nothing here is a special/hidden write path. */
+  async broadcastAppend(additionalText: string, note?: string) {
+    if (!additionalText.trim()) {
+      throw new Error("Text to add is required.");
+    }
+
+    const businesses = await this.tenants.listAll();
+    const targets = [PLATFORM_CONFIG_ID, ...businesses.map((b) => b.id)];
+
+    for (const businessId of targets) {
+      await this.aiConfig.append(businessId, additionalText, note);
+    }
+
+    return { updated: targets.length, businessIds: targets };
   }
 }

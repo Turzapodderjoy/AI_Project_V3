@@ -110,8 +110,33 @@ model Message {
   content        String
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  feedback       MessageFeedback?
 
   createdAt      DateTime @default(now())
+}
+
+// Per-message QA verdict from whoever is running the Chat Demo tab as a
+// test/QA tool — not customer-facing. One row per message (upsert on
+// re-submit, not a history of every click), since only the CURRENT
+// verdict matters for what the training pipeline reads. The training
+// pipeline treats a fail (with its note) as a strong, explicit signal
+// about exactly what was wrong with that specific answer — stronger
+// than its own judgment of the same exchange.
+model MessageFeedback {
+  id         String   @id @default(cuid())
+  messageId  String   @unique
+  businessId String
+
+  // "pass" | "fail"
+  verdict    String
+  note       String?
+
+  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId, verdict])
 }
 
 model CrawlTarget {

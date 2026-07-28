@@ -29,6 +29,7 @@ export class RagService {
       confidence: response.confidence,
       cached: response.cached,
       handoff: response.handoff,
+      messageId: response.messageId,
     };
   }
 }
