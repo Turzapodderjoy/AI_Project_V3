@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { UploadWidget } from "./UploadWidget";
-import { cellStyle } from "./dashboard-styles";
+import { cardStyle, cellStyle } from "./dashboard-styles";
 
 interface KnowledgeDocument {
   documentId: string;
@@ -137,10 +137,15 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
 
   return (
     <section>
-      <h2>Knowledge Hub</h2>
-      <UploadWidget businessId={businessId} onUploaded={refreshDocuments} />
+      <h1 style={{ marginBottom: 4 }}>Knowledge Hub</h1>
 
-      <h3 style={{ marginTop: 24 }}>Website crawler</h3>
+      <div style={cardStyle}>
+      <h3 style={{ marginTop: 0 }}>Upload a document</h3>
+      <UploadWidget businessId={businessId} onUploaded={refreshDocuments} />
+      </div>
+
+      <div style={cardStyle}>
+      <h3 style={{ marginTop: 0 }}>Website crawler</h3>
       <p style={{ opacity: 0.6 }}>
         Add a client&apos;s site once — it re-crawls automatically every day
         at 7am BST (Vercel Cron) to keep answers current. Respects
@@ -204,8 +209,10 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
           </tbody>
         </table>
       )}
+      </div>
 
-      <h3 style={{ marginTop: 24 }}>Indexed documents</h3>
+      <div style={cardStyle}>
+      <h3 style={{ marginTop: 0 }}>Indexed documents</h3>
 
       {!documents && <p>Loading…</p>}
 
@@ -250,10 +257,11 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
           </tbody>
         </table>
       )}
+      </div>
 
       {businessId && (
-        <>
-          <h3 style={{ marginTop: 24 }}>Embedding coverage by provider</h3>
+        <div style={cardStyle}>
+          <h3 style={{ marginTop: 0 }}>Embedding coverage by provider</h3>
           <p style={{ opacity: 0.6 }}>
             Every chunk gets embedded by EVERY active embedding provider,
             not just one — this is what makes retrieval work no matter
@@ -307,7 +315,7 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
               </tbody>
             </table>
           )}
-        </>
+        </div>
       )}
     </section>
   );

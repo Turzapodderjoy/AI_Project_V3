@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { cellStyle } from "./dashboard-styles";
+import { cardStyle, cellStyle } from "./dashboard-styles";
 
 interface Credential {
   channel: string;
@@ -66,8 +66,8 @@ export function PlatformChannelAppsPanel() {
   }
 
   return (
-    <section>
-      <h2>Integrations</h2>
+    <section style={cardStyle}>
+      <h2 style={{ marginTop: 0 }}>Integrations</h2>
       <p style={{ opacity: 0.6 }}>
         Platform-wide Meta App setup — a one-time step per channel, done
         here once, that unlocks the &quot;Connect&quot; button on every client&apos;s

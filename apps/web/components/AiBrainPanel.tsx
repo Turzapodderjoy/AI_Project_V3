@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 
-import { cellStyle } from "./dashboard-styles";
+import { cardStyle, cellStyle } from "./dashboard-styles";
 
 interface AiConfig {
   id: string;
@@ -127,8 +127,8 @@ export function AiBrainPanel({ businessId }: AiBrainPanelProps) {
   }
 
   return (
-    <section>
-      <h2>AI Brain</h2>
+    <section style={cardStyle}>
+      <h2 style={{ marginTop: 0 }}>AI Brain</h2>
       <p style={{ opacity: 0.6 }}>
         The system prompt and the knobs that control how eagerly the AI
         hands off vs. tries to answer, and how creative it is — editable

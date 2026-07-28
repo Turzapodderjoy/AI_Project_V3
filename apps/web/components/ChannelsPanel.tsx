@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { cardStyle } from "./dashboard-styles";
+
 interface CatalogEntry {
   id: string;
   label: string;
@@ -100,16 +102,16 @@ export function ChannelsPanel({ businessId }: { businessId: string }) {
 
   if (!data) {
     return (
-      <section>
-        <h2>Integrations</h2>
+      <section style={cardStyle}>
+        <h2 style={{ marginTop: 0 }}>Integrations</h2>
         <p>Loading…</p>
       </section>
     );
   }
 
   return (
-    <section>
-      <h2>Integrations</h2>
+    <section style={cardStyle}>
+      <h2 style={{ marginTop: 0 }}>Integrations</h2>
       <p style={{ opacity: 0.6 }}>
         Connect this client&apos;s own website, Facebook Messenger,
         Instagram, and WhatsApp to their AI chatbot. Every message from

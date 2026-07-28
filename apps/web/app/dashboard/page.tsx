@@ -9,23 +9,46 @@ import { AiBrainPanel } from "../../components/AiBrainPanel";
 import { TrainingPanel } from "../../components/TrainingPanel";
 import { QaReviewPanel } from "../../components/QaReviewPanel";
 import { PlatformChannelAppsPanel } from "../../components/PlatformChannelAppsPanel";
-import { cellStyle, formatBytes } from "../../components/dashboard-styles";
+import { OverviewPanel } from "../../components/OverviewPanel";
+import { DashboardShell, type NavGroup } from "../../components/DashboardShell";
+import { cardStyle, cellStyle, formatBytes } from "../../components/dashboard-styles";
 
-type Tab = "ai" | "embedding" | "brain" | "training" | "qa" | "channels" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
+type Tab = "overview" | "ai" | "embedding" | "brain" | "training" | "qa" | "channels" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "ai", label: "AI Providers" },
-  { id: "embedding", label: "Embedding Providers" },
-  { id: "brain", label: "AI Brain" },
-  { id: "training", label: "Training & Insights" },
-  { id: "qa", label: "QA Review" },
-  { id: "channels", label: "Integrations" },
-  { id: "usage", label: "Usage" },
-  { id: "clients", label: "Clients" },
-  { id: "knowledge", label: "Knowledge Hub" },
-  { id: "chat", label: "Chat Demo" },
-  { id: "handoffs", label: "Handoffs" },
-  { id: "database", label: "Database" },
+const NAV_GROUPS: NavGroup<Tab>[] = [
+  { items: [{ id: "overview", label: "Overview" }] },
+  { items: [{ id: "clients", label: "Clients" }] },
+  {
+    label: "AI Brain",
+    items: [
+      { id: "brain", label: "AI Brain" },
+      { id: "training", label: "Training & Insights" },
+      { id: "qa", label: "QA Review" },
+    ],
+  },
+  {
+    label: "Content",
+    items: [
+      { id: "knowledge", label: "Knowledge Hub" },
+      { id: "chat", label: "Chat Demo" },
+      { id: "handoffs", label: "Handoffs" },
+    ],
+  },
+  {
+    label: "Providers",
+    items: [
+      { id: "ai", label: "AI Providers" },
+      { id: "embedding", label: "Embedding Providers" },
+    ],
+  },
+  {
+    label: "Platform",
+    items: [
+      { id: "channels", label: "Integrations" },
+      { id: "usage", label: "Usage" },
+      { id: "database", label: "Database" },
+    ],
+  },
 ];
 
 interface ProviderStatus {
@@ -95,36 +118,15 @@ interface Client {
 }
 
 export default function DashboardPage() {
-  const [tab, setTab] = useState<Tab>("ai");
+  const [tab, setTab] = useState<Tab>("overview");
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: 40 }}>
-      <h1>Mother Dashboard</h1>
-      <p style={{ opacity: 0.6, marginTop: -8 }}>
-        Platform-wide view across every client — no login yet, internal use only.
-      </p>
-
-      <div style={{ display: "flex", gap: 8, margin: "24px 0", flexWrap: "wrap" }}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            style={{
-              padding: "8px 16px",
-              fontWeight: tab === t.id ? "bold" : "normal",
-              border: tab === t.id ? "2px solid #666" : "1px solid #333",
-              borderRadius: 6,
-              background: "transparent",
-              cursor: "pointer",
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
+    <DashboardShell sidebarLabel="Mother Dashboard" groups={NAV_GROUPS} activeTab={tab} onSelect={setTab}>
       {/* Every panel stays mounted (hidden via CSS, not unmounted) so
           switching tabs never wipes a panel's local state. */}
+      <div style={{ display: tab === "overview" ? "block" : "none" }}>
+        <OverviewPanel />
+      </div>
       <div style={{ display: tab === "ai" ? "block" : "none" }}>
         <AiProvidersPanel />
       </div>
@@ -161,7 +163,7 @@ export default function DashboardPage() {
       <div style={{ display: tab === "database" ? "block" : "none" }}>
         <DatabasePanel />
       </div>
-    </main>
+    </DashboardShell>
   );
 }
 
@@ -221,8 +223,8 @@ function ClientsPanel() {
   }
 
   return (
-    <section>
-      <h2>Clients</h2>
+    <section style={cardStyle}>
+      <h2 style={{ marginTop: 0 }}>Clients</h2>
       <p style={{ opacity: 0.6 }}>
         Adding a company creates its dashboard immediately — every client
         shares the same dashboard page (/dashboard/[id]), so there&apos;s
@@ -361,8 +363,8 @@ function AiProvidersPanel() {
   }
 
   return (
-    <section>
-      <h2>AI Providers</h2>
+    <section style={cardStyle}>
+      <h2 style={{ marginTop: 0 }}>AI Providers</h2>
       <p style={{ opacity: 0.6 }}>
         Turn a provider on/off to experiment — disable the others to force
         every chat through one specific provider, or disable one to see
@@ -533,8 +535,8 @@ function EmbeddingProvidersPanel() {
   }
 
   return (
-    <section>
-      <h2>Embedding Providers</h2>
+    <section style={cardStyle}>
+      <h2 style={{ marginTop: 0 }}>Embedding Providers</h2>
       <p style={{ opacity: 0.6 }}>
         The same rotation/failover the AI Providers panel does for chat
         replies, but for the embedding step that runs before every
@@ -658,7 +660,7 @@ function UsagePanel() {
 
   return (
     <section>
-      <h2>Usage</h2>
+      <h1 style={{ marginBottom: 4 }}>Usage</h1>
       <p style={{ opacity: 0.6 }}>
         In-memory counters, reset on server restart — and in local testing
         they didn&apos;t even stay consistent request-to-request, which means
@@ -674,7 +676,8 @@ function UsagePanel() {
         </p>
       )}
 
-      <h3>By chat</h3>
+      <div style={cardStyle}>
+      <h3 style={{ marginTop: 0 }}>By chat</h3>
       {!chats && <p>Loading…</p>}
       {chats && (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -709,8 +712,10 @@ function UsagePanel() {
           </tbody>
         </table>
       )}
+      </div>
 
-      <h3 style={{ marginTop: 24 }}>AI providers (totals)</h3>
+      <div style={cardStyle}>
+      <h3 style={{ marginTop: 0 }}>AI providers (totals)</h3>
       {!aiUsage && <p>Loading…</p>}
       {aiUsage && (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -743,8 +748,10 @@ function UsagePanel() {
           </tbody>
         </table>
       )}
+      </div>
 
-      <h3 style={{ marginTop: 24 }}>Embedding providers (totals)</h3>
+      <div style={cardStyle}>
+      <h3 style={{ marginTop: 0 }}>Embedding providers (totals)</h3>
       {!embeddingUsage && <p>Loading…</p>}
       {embeddingUsage && (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -778,6 +785,7 @@ function UsagePanel() {
           </tbody>
         </table>
       )}
+      </div>
     </section>
   );
 }
@@ -792,8 +800,8 @@ function DatabasePanel() {
   }, []);
 
   return (
-    <section>
-      <h2>Database</h2>
+    <section style={cardStyle}>
+      <h2 style={{ marginTop: 0 }}>Database</h2>
       <p style={{ opacity: 0.6 }}>
         Swap <code>DATABASE_URL</code> in your env (local Postgres today, any
         online Postgres — Neon, Supabase, RDS — tomorrow) and this panel

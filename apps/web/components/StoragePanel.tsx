@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { cellStyle, formatBytes } from "./dashboard-styles";
+import { cardStyle, cellStyle, formatBytes } from "./dashboard-styles";
 
 interface StorageInfo {
   knowledgeChunks: number;
@@ -29,8 +29,8 @@ export function StoragePanel({ businessId }: { businessId: string }) {
   if (!info) return <p>Loading…</p>;
 
   return (
-    <section>
-      <h2>Storage</h2>
+    <section style={cardStyle}>
+      <h2 style={{ marginTop: 0 }}>Storage</h2>
       <p style={{ opacity: 0.6 }}>
         Estimated size, not exact — the knowledge base is a shared JSON
         file today (filtered by this client's tag), so this is a

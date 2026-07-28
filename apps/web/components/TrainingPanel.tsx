@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 
-import { cellStyle } from "./dashboard-styles";
+import { cardStyle, cellStyle } from "./dashboard-styles";
 
 interface ChatAnalysis {
   id: string;
@@ -151,7 +151,7 @@ export function TrainingPanel() {
 
   return (
     <section>
-      <h2>Training &amp; Insights</h2>
+      <h1 style={{ marginBottom: 4 }}>Training &amp; Insights</h1>
       <p style={{ opacity: 0.6 }}>
         Every day at 5:00am BST, a reasoning LLM reviews new chat
         sessions across every client — dropping spam/irrelevant/harmful
@@ -167,7 +167,8 @@ export function TrainingPanel() {
       </button>
       {message && <p style={{ fontSize: 13, opacity: 0.8, marginTop: 8 }}>{message}</p>}
 
-      <h3 style={{ marginTop: 24 }}>Run history</h3>
+      <div style={{ ...cardStyle, marginTop: 20 }}>
+      <h3 style={{ marginTop: 0 }}>Run history</h3>
       <p style={{ opacity: 0.6 }}>
         Every time the pipeline has run (scheduled or manual), with what
         it did and any suggestions that run produced.
@@ -240,8 +241,10 @@ export function TrainingPanel() {
           </tbody>
         </table>
       )}
+      </div>
 
-      <h3 style={{ marginTop: 24 }}>Pending suggestions</h3>
+      <div style={cardStyle}>
+      <h3 style={{ marginTop: 0 }}>Pending suggestions</h3>
       {!pending && <p>Loading…</p>}
       {pending && pending.length === 0 && (
         <p style={{ opacity: 0.6 }}>No pending suggestions right now.</p>
@@ -299,8 +302,10 @@ export function TrainingPanel() {
           </tbody>
         </table>
       )}
+      </div>
 
-      <h3 style={{ marginTop: 24 }}>Decided history</h3>
+      <div style={cardStyle}>
+      <h3 style={{ marginTop: 0 }}>Decided history</h3>
       {!decided && <p>Loading…</p>}
       {decided && (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -335,8 +340,10 @@ export function TrainingPanel() {
           </tbody>
         </table>
       )}
+      </div>
 
-      <h3 style={{ marginTop: 24 }}>Findings log</h3>
+      <div style={cardStyle}>
+      <h3 style={{ marginTop: 0 }}>Findings log</h3>
       <p style={{ opacity: 0.6 }}>
         Every conversation the pipeline has analyzed, kept or dropped —
         the full human-readable audit trail.
@@ -397,6 +404,7 @@ export function TrainingPanel() {
           </tbody>
         </table>
       )}
+      </div>
     </section>
   );
 }

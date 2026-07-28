@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 
-import { cellStyle } from "./dashboard-styles";
+import { cardStyle, cellStyle } from "./dashboard-styles";
 
 interface QaFeedback {
   messageId: string;
@@ -45,8 +45,8 @@ export function QaReviewPanel() {
   useEffect(refresh, []);
 
   return (
-    <section>
-      <h2>QA Review</h2>
+    <section style={cardStyle}>
+      <h2 style={{ marginTop: 0 }}>QA Review</h2>
       <p style={{ opacity: 0.6 }}>
         Every Pass/Fail submitted from any client&apos;s Chat Demo tab.
         Once the daily training pipeline (5:00am BST) analyzes the

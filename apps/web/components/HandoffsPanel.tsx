@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { cardStyle } from "./dashboard-styles";
+
 interface HandoffSummary {
   sessionId: string;
   status: string;
@@ -65,8 +67,8 @@ export function HandoffsPanel({ businessId }: { businessId?: string }) {
   }
 
   return (
-    <section>
-      <h2>Handoffs</h2>
+    <section style={cardStyle}>
+      <h2 style={{ marginTop: 0 }}>Handoffs</h2>
       <p style={{ opacity: 0.6 }}>
         Chats the AI couldn&apos;t confidently answer land here with an
         auto-generated summary — pick one up and reply as a human agent.

@@ -9,17 +9,26 @@ import { HandoffsPanel } from "../../../components/HandoffsPanel";
 import { StoragePanel } from "../../../components/StoragePanel";
 import { AiBrainPanel } from "../../../components/AiBrainPanel";
 import { ChannelsPanel } from "../../../components/ChannelsPanel";
+import { ClientOverviewPanel } from "../../../components/ClientOverviewPanel";
+import { DashboardShell, type NavGroup } from "../../../components/DashboardShell";
 
-type Tab = "knowledge" | "chat" | "handoffs" | "storage" | "brain" | "channels";
+type Tab = "overview" | "knowledge" | "chat" | "handoffs" | "storage" | "brain" | "channels";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "knowledge", label: "Knowledge Hub" },
-  { id: "chat", label: "Chat Demo" },
-  { id: "handoffs", label: "Handoffs" },
-  { id: "storage", label: "Storage" },
-  { id: "brain", label: "AI Brain" },
-  { id: "channels", label: "Integrations" },
+const NAV_GROUPS: NavGroup<Tab>[] = [
+  {
+    items: [
+      { id: "overview", label: "Overview" },
+      { id: "knowledge", label: "Knowledge Hub" },
+      { id: "chat", label: "Chat Demo" },
+      { id: "handoffs", label: "Handoffs" },
+      { id: "storage", label: "Storage" },
+      { id: "brain", label: "AI Brain" },
+      { id: "channels", label: "Integrations" },
+    ],
+  },
 ];
+
+const TAB_IDS = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.id));
 
 interface Client {
   id: string;
@@ -37,15 +46,15 @@ export default function ClientDashboardPage() {
   const params = useParams<{ businessId: string }>();
   const businessId = params.businessId;
 
-  const [tab, setTab] = useState<Tab>("knowledge");
+  const [tab, setTab] = useState<Tab>("overview");
   const [client, setClient] = useState<Client | null>(null);
 
-  // Always renders "knowledge" on the server/first paint to avoid a
+  // Always renders "overview" on the server/first paint to avoid a
   // hydration mismatch, then jumps to the OAuth callback's ?tab= param
   // (see api/oauth/[channel]/callback) once mounted.
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("tab") as Tab | null;
-    if (requested && TABS.some((t) => t.id === requested)) {
+    if (requested && TAB_IDS.includes(requested)) {
       setTab(requested);
     }
   }, []);
@@ -60,32 +69,22 @@ export default function ClientDashboardPage() {
   }, [businessId]);
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: 40 }}>
-      <h1>{client?.name ?? businessId}</h1>
-      <p style={{ opacity: 0.6, marginTop: -8 }}>
-        Client dashboard — no login yet, internal use only.{" "}
-        <a href="/dashboard">Back to mother dashboard</a>
-      </p>
-
-      <div style={{ display: "flex", gap: 8, margin: "24px 0", flexWrap: "wrap" }}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            style={{
-              padding: "8px 16px",
-              fontWeight: tab === t.id ? "bold" : "normal",
-              border: tab === t.id ? "2px solid #666" : "1px solid #333",
-              borderRadius: 6,
-              background: "transparent",
-              cursor: "pointer",
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
+    <DashboardShell
+      sidebarLabel={
+        <div>
+          <div style={{ fontSize: 14 }}>{client?.name ?? businessId}</div>
+          <a href="/dashboard" style={{ fontSize: 11, opacity: 0.6, fontWeight: 400 }}>
+            ← Mother dashboard
+          </a>
+        </div>
+      }
+      groups={NAV_GROUPS}
+      activeTab={tab}
+      onSelect={setTab}
+    >
+      <div style={{ display: tab === "overview" ? "block" : "none" }}>
+        <ClientOverviewPanel businessId={businessId} />
       </div>
-
       <div style={{ display: tab === "knowledge" ? "block" : "none" }}>
         <KnowledgeHubPanel businessId={businessId} />
       </div>
@@ -104,6 +103,6 @@ export default function ClientDashboardPage() {
       <div style={{ display: tab === "channels" ? "block" : "none" }}>
         <ChannelsPanel businessId={businessId} />
       </div>
-    </main>
+    </DashboardShell>
   );
 }
