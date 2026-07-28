@@ -1,10 +1,7 @@
 import { Chunker } from "@ai-chat-platform/chunker";
 import type { EmbeddingManager } from "@ai-chat-platform/embedding-manager";
 
-import {
-  JsonProvider,
-  VectorStoreManager,
-} from "@ai-chat-platform/vector-store";
+import type { VectorStoreManager } from "@ai-chat-platform/vector-store";
 import type { VectorRecord } from "@ai-chat-platform/vector-store";
 
 import type {
@@ -13,20 +10,18 @@ import type {
 } from "./types";
 
 export class IndexingService {
-  private readonly vectorStore =
-    new VectorStoreManager(
-      new JsonProvider()
-    );
-
   private readonly chunker =
     new Chunker();
 
-  // Takes the shared, already-registered EmbeddingManager (built once in
-  // bootstrap/create-app.ts) instead of constructing its own — a private
-  // `new EmbeddingManager()` here used to mean document uploads never
-  // got the dashboard-activated/rotating embedding providers everything
-  // else uses, only a raw unconfigured Jina instance.
-  constructor(private readonly embeddingManager: EmbeddingManager) {}
+  // Takes the shared, already-registered EmbeddingManager and
+  // VectorStoreManager (both built once in bootstrap/create-app.ts)
+  // instead of constructing their own — a private `new VectorStoreManager
+  // (new JsonProvider())` here used to mean this class read/wrote its own
+  // separate instance of the store from every other construction site.
+  constructor(
+    private readonly embeddingManager: EmbeddingManager,
+    private readonly vectorStore: VectorStoreManager
+  ) {}
 
   async initialize(): Promise<void> {
     await this.vectorStore.initialize();
@@ -151,19 +146,21 @@ export class IndexingService {
     }
 
     const providerNames = onlyProvider ? [onlyProvider] : this.embeddingManager.getProviderNames();
-    let chunksBackfilled = 0;
 
-    // JsonProvider.upsert() reads and rewrites the ENTIRE vector store file
-    // on every call — calling it once per (chunk × missing provider), as
-    // this used to, meant N×M full-file read/parse/stringify/write cycles
-    // against a file that only grows. Accumulating every new record and
-    // upserting once at the end turns that into a single rewrite for the
-    // whole run, regardless of how many chunks/providers needed backfilling.
-    const newRecords: VectorRecord[] = [];
+    // Inverted from chunk-outer/provider-inner (which used to call the
+    // single-item, unpaced embedWithProvider() once per chunk × missing
+    // provider — hundreds of sequential unpaced requests during a real
+    // backfill, the actual cause of reported 429s) to provider-outer:
+    // collect every chunk missing a given provider's coverage, then embed
+    // all of them in ONE embedManyWithProvider call per provider — the
+    // already paced/batched path (see PROVIDER_BATCH_CONFIG in
+    // embedding-manager.ts). Also means one vectorStore.upsert() call for
+    // the whole run instead of N×M individual writes.
+    const missingByProvider = new Map<string, VectorRecord[]>();
 
     for (const records of byChunk.values()) {
       // Records without a tag at all predate this feature entirely and
-      // were all embedded by Jina — see json-provider.ts's search().
+      // were all embedded by Jina — see postgres-provider.ts's search().
       const covered = new Set(
         records.map((r) => (r.metadata?.embeddingProvider as string | undefined) ?? "jina")
       );
@@ -174,33 +171,43 @@ export class IndexingService {
       }
 
       const sample = records[0]!;
-      let addedForThisChunk = false;
-
       for (const providerName of missing) {
-        try {
-          const result = await this.embeddingManager.embedWithProvider(providerName, sample.text);
+        const list = missingByProvider.get(providerName) ?? [];
+        list.push(sample);
+        missingByProvider.set(providerName, list);
+      }
+    }
 
+    const newRecords: VectorRecord[] = [];
+    const backfilledChunkKeys = new Set<string>();
+
+    for (const [providerName, samples] of missingByProvider) {
+      try {
+        const results = await this.embeddingManager.embedManyWithProvider(
+          providerName,
+          samples.map((s) => s.text)
+        );
+
+        samples.forEach((sample, i) => {
           newRecords.push({
             id: crypto.randomUUID(),
             documentId: sample.documentId,
             chunkId: sample.chunkId,
             text: sample.text,
-            embedding: result.embedding,
+            embedding: results[i]!.embedding,
             metadata: {
               ...sample.metadata,
               embeddingProvider: providerName,
               indexedAt: new Date().toISOString(),
             },
           });
-
-          addedForThisChunk = true;
-        } catch {
-          // That provider is still unavailable — next day's cron run tries again.
-        }
-      }
-
-      if (addedForThisChunk) {
-        chunksBackfilled += 1;
+          backfilledChunkKeys.add(`${sample.documentId}::${sample.chunkId}`);
+        });
+      } catch {
+        // That provider is still unavailable (or failed partway through
+        // this batch, in which case this run's progress for it is lost —
+        // acceptable since this now runs frequently via auto-heal, so the
+        // next run picks it back up) — next scheduled run tries again.
       }
     }
 
@@ -208,7 +215,7 @@ export class IndexingService {
       await this.vectorStore.upsert(newRecords);
     }
 
-    return { chunksChecked: byChunk.size, chunksBackfilled, vectorsAdded: newRecords.length };
+    return { chunksChecked: byChunk.size, chunksBackfilled: backfilledChunkKeys.size, vectorsAdded: newRecords.length };
   }
 
   /** Read-only per-provider coverage report for one business — same

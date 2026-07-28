@@ -1,4 +1,4 @@
-import type { EmbeddingProvider, EmbeddingResult } from "@ai-chat-platform/embedding-manager";
+import { EmbeddingProvider, EmbeddingResult, retryOn429 } from "@ai-chat-platform/embedding-manager";
 import { InvalidApiKeyError, RateLimitedError } from "@ai-chat-platform/types";
 
 // Verified with a real key: POST /v1/embeddings, model "mistral-embed",
@@ -13,30 +13,32 @@ interface MistralEmbeddingResponse {
 }
 
 async function callApi(input: string[], apiKey: string): Promise<MistralEmbeddingResponse> {
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ model: EMBED_MODEL, input }),
+  return retryOn429(async () => {
+    const res = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model: EMBED_MODEL, input }),
+    });
+
+    if (!res.ok) {
+      const message = `Mistral embedding request failed (${res.status}): ${await res.text().catch(() => "")}`;
+
+      if (res.status === 401 || res.status === 403) {
+        throw new InvalidApiKeyError(message);
+      }
+
+      if (res.status === 429) {
+        throw new RateLimitedError(message);
+      }
+
+      throw new Error(message);
+    }
+
+    return (await res.json()) as MistralEmbeddingResponse;
   });
-
-  if (!res.ok) {
-    const message = `Mistral embedding request failed (${res.status}): ${await res.text().catch(() => "")}`;
-
-    if (res.status === 401 || res.status === 403) {
-      throw new InvalidApiKeyError(message);
-    }
-
-    if (res.status === 429) {
-      throw new RateLimitedError(message);
-    }
-
-    throw new Error(message);
-  }
-
-  return (await res.json()) as MistralEmbeddingResponse;
 }
 
 export class MistralEmbeddingProvider implements EmbeddingProvider {

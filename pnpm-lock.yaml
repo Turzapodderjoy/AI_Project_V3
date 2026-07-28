@@ -127,6 +127,9 @@ importers:
       '@ai-chat-platform/ai-manager':
         specifier: workspace:*
         version: link:../ai-manager
+      '@ai-chat-platform/auto-heal':
+        specifier: workspace:*
+        version: link:../auto-heal
       '@ai-chat-platform/channel-catalog':
         specifier: workspace:*
         version: link:../channel-catalog
@@ -192,6 +195,24 @@ importers:
         specifier: ^9.0.10
         version: 9.0.10
 
+  packages/auto-heal:
+    dependencies:
+      '@ai-chat-platform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@ai-chat-platform/embedding-manager':
+        specifier: workspace:*
+        version: link:../embedding-manager
+      '@ai-chat-platform/indexing':
+        specifier: workspace:*
+        version: link:../indexing
+      '@ai-chat-platform/tenant':
+        specifier: workspace:*
+        version: link:../tenant
+      '@ai-chat-platform/web-crawler':
+        specifier: workspace:*
+        version: link:../web-crawler
+
   packages/bootstrap:
     dependencies:
       '@ai-chat-platform/ai-config':
@@ -203,6 +224,9 @@ importers:
       '@ai-chat-platform/api':
         specifier: workspace:*
         version: link:../api
+      '@ai-chat-platform/auto-heal':
+        specifier: workspace:*
+        version: link:../auto-heal
       '@ai-chat-platform/channel-catalog':
         specifier: workspace:*
         version: link:../channel-catalog
@@ -336,9 +360,6 @@ importers:
       '@ai-chat-platform/embedding-manager':
         specifier: workspace:*
         version: link:../embedding-manager
-      '@ai-chat-platform/gemini':
-        specifier: workspace:*
-        version: link:../gemini
       '@ai-chat-platform/mistral':
         specifier: workspace:*
         version: link:../mistral
@@ -568,7 +589,11 @@ importers:
         specifier: workspace:*
         version: link:../ingestion
 
-  packages/vector-store: {}
+  packages/vector-store:
+    dependencies:
+      '@ai-chat-platform/database':
+        specifier: workspace:*
+        version: link:../database
 
   packages/web-crawler:
     dependencies:

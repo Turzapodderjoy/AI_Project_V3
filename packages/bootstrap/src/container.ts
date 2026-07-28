@@ -21,6 +21,7 @@ import {
   PipelineRunService,
 } from "@ai-chat-platform/training-pipeline";
 import { ChannelConnectionService, ChannelAppCredentialService } from "@ai-chat-platform/channel-connections";
+import { AutoHealService } from "@ai-chat-platform/auto-heal";
 import { ChatController } from "@ai-chat-platform/api";
 import { UploadController } from "@ai-chat-platform/api";
 import { HealthController } from "@ai-chat-platform/api";
@@ -32,6 +33,7 @@ import { EmbeddingController } from "@ai-chat-platform/api";
 import { TrainingController } from "@ai-chat-platform/api";
 import { ChannelController } from "@ai-chat-platform/api";
 import { FeedbackController } from "@ai-chat-platform/api";
+import { AutoHealController } from "@ai-chat-platform/api";
 import { ApiRouter } from "@ai-chat-platform/api";
 
 export class Container {
@@ -80,7 +82,7 @@ export class Container {
     // the dashboard-activated/rotating embedding providers everything
     // else uses. One instance now, wired to the real `embeddings`.
     const indexingService =
-      new IndexingService(embeddings);
+      new IndexingService(embeddings, vectorStore);
 
     const uploadService =
       new UploadService(
@@ -92,7 +94,7 @@ export class Container {
       new TenantService();
 
     const crawlerService =
-      new CrawlerService(indexingService);
+      new CrawlerService(indexingService, vectorStore);
 
     // Deliberately its own dedicated key (GROQ_TRAINING_API_KEY), not
     // the shared AIManager/Groq key powering live chat — this pipeline's
@@ -132,6 +134,9 @@ export class Container {
     const channelAppCredentials =
       new ChannelAppCredentialService();
 
+    const autoHeal =
+      new AutoHealService(crawlerService, indexingService, embeddings, tenants);
+
     this.router =
       new ApiRouter(
         new ChatController(rag),
@@ -164,7 +169,8 @@ export class Container {
           channelAppCredentials,
           rag
         ),
-        new FeedbackController(messageFeedback)
+        new FeedbackController(messageFeedback),
+        new AutoHealController(autoHeal)
       );
   }
 

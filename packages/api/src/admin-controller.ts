@@ -246,7 +246,7 @@ export class AdminController {
       conversations,
       messages,
       crawlTargets,
-      vectorStoreLocation: "Local JSON file (packages/vector-store) — shared across clients by businessId tag, not yet pgvector/cloud",
+      vectorStoreLocation: "Postgres (packages/database) — shared across clients by businessId tag, brute-force cosine similarity in JS, not pgvector",
       databaseLocation: url ? `PostgreSQL — ${maskConnectionString(url)}` : null,
     };
   }

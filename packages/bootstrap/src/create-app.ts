@@ -1,5 +1,5 @@
 import { EmbeddingManager } from "@ai-chat-platform/embedding-manager";
-import { VectorStoreManager, JsonProvider } from "@ai-chat-platform/vector-store";
+import { VectorStoreManager, PostgresProvider } from "@ai-chat-platform/vector-store";
 import { VectorStoreRetriever } from "@ai-chat-platform/retriever";
 import { AIManager } from "@ai-chat-platform/ai-manager";
 import { ProviderKeyStore } from "@ai-chat-platform/provider-keys";
@@ -26,7 +26,7 @@ export async function createApp(): Promise<Application> {
   const embeddings = new EmbeddingManager();
   registerEmbeddingProviders(embeddings, await providerKeys.getAll("embedding"));
 
-  const vectorStore = new VectorStoreManager(new JsonProvider());
+  const vectorStore = new VectorStoreManager(new PostgresProvider());
   await vectorStore.initialize();
 
   const retriever = new VectorStoreRetriever(embeddings, vectorStore);

@@ -9,6 +9,7 @@ import { EmbeddingController } from "./embedding-controller";
 import { TrainingController } from "./training-controller";
 import { ChannelController } from "./channel-controller";
 import { FeedbackController } from "./feedback-controller";
+import { AutoHealController } from "./auto-heal-controller";
 
 export class ApiRouter {
   constructor(
@@ -22,6 +23,7 @@ export class ApiRouter {
     readonly embedding: EmbeddingController,
     readonly training: TrainingController,
     readonly channels: ChannelController,
-    readonly feedback: FeedbackController
+    readonly feedback: FeedbackController,
+    readonly autoHeal: AutoHealController
   ) {}
 }

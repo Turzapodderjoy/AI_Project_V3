@@ -1,5 +1,4 @@
 import { JinaProvider } from "@ai-chat-platform/embedding-manager";
-import { GeminiEmbeddingProvider } from "@ai-chat-platform/gemini";
 import { MistralEmbeddingProvider } from "@ai-chat-platform/mistral";
 
 import type { EmbeddingCatalogEntry } from "./types";
@@ -17,12 +16,6 @@ export const EMBEDDING_PROVIDER_CATALOG: EmbeddingCatalogEntry[] = [
     label: "Jina",
     envKey: "JINA_API_KEY",
     create: () => new JinaProvider(),
-  },
-  {
-    id: "gemini",
-    label: "Gemini",
-    envKey: "GEMINI_EMBEDDING_API_KEY",
-    create: () => new GeminiEmbeddingProvider(),
   },
   {
     id: "mistral",

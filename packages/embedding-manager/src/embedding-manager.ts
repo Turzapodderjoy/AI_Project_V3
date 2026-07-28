@@ -19,19 +19,35 @@ interface RegisteredProvider {
 }
 
 // Every embedding provider's embedMany() sends the WHOLE input array as
-// ONE API call (see packages/{gemini,mistral,embedding-manager/jina}) —
-// there's no batching or pacing inside any of them. A single large
-// document (a crawled category page can be 100+ chunks) or a bulk
-// backfill run therefore fires one huge request per provider per
-// call, which is exactly the kind of burst that trips a provider's
-// per-minute request/token ceiling (the same class of problem already
-// hit and fixed for Groq's chat rate limit in the training pipeline).
-// Splitting into smaller sub-batches with a short pace between them
-// keeps steady-state usage under the ceiling instead of bursting into
-// it — applies uniformly to uploads, crawls, and backfill, since they
-// all funnel through embedManyWithProvider() below.
-const EMBED_BATCH_SIZE = 20;
-const EMBED_BATCH_DELAY_MS = 1000;
+// ONE API call (see packages/{mistral,embedding-manager/jina}) — there's
+// no batching or pacing inside any of them. A single large document (a
+// crawled category page can be 100+ chunks) or a bulk backfill run
+// therefore fires one huge request per provider per call, which is
+// exactly the kind of burst that trips a provider's per-minute
+// request/token ceiling (the same class of problem already hit and fixed
+// for Groq's chat rate limit in the training pipeline). Splitting into
+// smaller sub-batches with a pace between them keeps steady-state usage
+// under the ceiling instead of bursting into it.
+//
+// Empirically benchmarked (packages/embedding-manager/src/scripts/
+// benchmark-rate-limits.ts, 2026-07-29) against real Jina/Mistral keys:
+// even 60 fully unpaced sequential single-item requests produced zero
+// 429s for either provider — a short burst test can't see a per-minute
+// ceiling that only bites under SUSTAINED load across many businesses
+// over minutes, not a few seconds. Per explicit direction, these values
+// are deliberately set well below the observed-clean rate rather than
+// pushed toward it — slower and reliable beats fast and occasionally
+// rate-limited. Per-provider (not one shared global) since different
+// providers can have genuinely different real ceilings.
+const DEFAULT_BATCH_CONFIG = { batchSize: 20, delayMs: 1000 };
+const PROVIDER_BATCH_CONFIG: Record<string, { batchSize: number; delayMs: number }> = {
+  jina: { batchSize: 15, delayMs: 2500 },
+  mistral: { batchSize: 15, delayMs: 2500 },
+};
+
+function batchConfigFor(providerName: string): { batchSize: number; delayMs: number } {
+  return PROVIDER_BATCH_CONFIG[providerName.toLowerCase()] ?? DEFAULT_BATCH_CONFIG;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -185,10 +201,9 @@ export class EmbeddingManager {
   }
 
   /** Batch version of embedWithProvider — one specific named provider,
-   * bypassing rotation. Splits into EMBED_BATCH_SIZE-sized sub-batches
-   * paced EMBED_BATCH_DELAY_MS apart (see the comment above those
-   * constants) so a large `texts` array can't fire one oversized burst
-   * request at this provider. */
+   * bypassing rotation. Splits into per-provider-sized sub-batches
+   * (see PROVIDER_BATCH_CONFIG above) paced apart so a large `texts`
+   * array can't fire one oversized burst request at this provider. */
   async embedManyWithProvider(providerName: string, texts: string[]): Promise<EmbeddingResult[]> {
     const entry = this.providers.get(providerName.toLowerCase());
 
@@ -196,14 +211,15 @@ export class EmbeddingManager {
       throw new Error(`Embedding provider ${providerName} is not registered.`);
     }
 
+    const { batchSize, delayMs } = batchConfigFor(providerName);
     const results: EmbeddingResult[] = [];
 
-    for (let i = 0; i < texts.length; i += EMBED_BATCH_SIZE) {
+    for (let i = 0; i < texts.length; i += batchSize) {
       if (i > 0) {
-        await sleep(EMBED_BATCH_DELAY_MS);
+        await sleep(delayMs);
       }
 
-      const batch = texts.slice(i, i + EMBED_BATCH_SIZE);
+      const batch = texts.slice(i, i + batchSize);
       const failures: Error[] = [];
 
       const result = await this.attemptProvider(

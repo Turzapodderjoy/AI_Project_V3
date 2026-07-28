@@ -61,6 +61,8 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
   const [crawlMessage, setCrawlMessage] = useState("");
   const [backfilling, setBackfilling] = useState<string | null>(null);
   const [backfillMessage, setBackfillMessage] = useState("");
+  const [healing, setHealing] = useState(false);
+  const [healMessage, setHealMessage] = useState("");
   const wasActive = useRef(false);
 
   function refreshDocuments() {
@@ -179,9 +181,54 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
     }
   }
 
+  /** Platform-wide (not scoped to businessId — auto-heal checks every
+   * business) manual trigger for the same job the every-30-minute
+   * external scheduler runs. Shows the run's own result inline instead
+   * of a separate history table — enough to confirm it worked without
+   * building a second run-history UI next to the training pipeline's. */
+  async function runAutoHeal() {
+    setHealing(true);
+    setHealMessage("");
+
+    try {
+      const res = await fetch("/api/admin/auto-heal/run", { method: "POST" });
+      const result = await res.json();
+
+      setHealMessage(
+        res.ok
+          ? `${result.status === "succeeded" ? "✅" : "❌"} Checked ${result.businessesChecked} business(es), backfilled ${result.providersBackfilled} provider(s), retried ${result.crawlTargetsRetried} crawl target(s).${result.error ? ` Error: ${result.error}` : ""}`
+          : `Error: ${result.error}`
+      );
+
+      if (res.ok) {
+        refreshDocuments();
+        refreshTargets();
+      }
+    } finally {
+      setHealing(false);
+    }
+  }
+
   return (
     <section>
       <h1 style={{ marginBottom: 4 }}>Knowledge Hub</h1>
+
+      <div style={cardStyle}>
+        <h3 style={{ marginTop: 0 }}>Auto-heal</h3>
+        <p style={{ opacity: 0.6 }}>
+          Runs automatically every 30 minutes (external scheduler, not
+          Vercel&apos;s own cron — see the cron route&apos;s comment):
+          backfills any embedding provider that&apos;s under 100% coverage
+          (if it&apos;s actually fixable — enabled with a usable key) and
+          retries any crawl target stuck in an error state, each on its
+          own cooldown so a stuck one doesn&apos;t get hammered every
+          check. Force a check now instead of waiting for the next cycle.
+        </p>
+        <button onClick={runAutoHeal} disabled={healing}>
+          {healing ? "Checking…" : "Run now"}
+        </button>
+        {healMessage && <p style={{ fontSize: 13, opacity: 0.8, marginTop: 8 }}>{healMessage}</p>}
+      </div>
 
       <div style={cardStyle}>
       <h3 style={{ marginTop: 0 }}>Upload a document</h3>

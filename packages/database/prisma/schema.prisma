@@ -153,9 +153,88 @@ model CrawlTarget {
   lastChunkCount Int?
   lastError      String?
 
+  // Auto-heal retry/backoff state. lastCrawledAt only updates on a
+  // *successful* crawl, so it can't tell auto-heal "how long has this
+  // target been sitting broken" — updatedAt does. nextRetryAt gates when
+  // auto-heal is allowed to retry a status:"error" target again;
+  // retryCount drives the backoff (min(1h * 2^retryCount, 24h)), reset
+  // to 0 on the next successful crawl.
+  retryCount     Int       @default(0)
+  nextRetryAt    DateTime?
+  updatedAt      DateTime  @default(now()) @updatedAt
+
   createdAt      DateTime  @default(now())
 
   @@unique([businessId, url])
+}
+
+// One row per invocation of the auto-heal job (cron every 30min, or the
+// dashboard's manual "Run now" button) — mirrors PipelineRun's shape but
+// fixes its gap: PipelineRun has no status/error columns, so a crash
+// mid-run leaves finishedAt null forever with nothing recorded about
+// what happened. This table always writes a terminal status.
+model AutoHealRun {
+  id                  String    @id @default(cuid())
+
+  // "cron" | "manual"
+  triggeredBy         String
+
+  startedAt           DateTime  @default(now())
+  finishedAt          DateTime?
+
+  // "running" | "succeeded" | "failed"
+  status              String    @default("running")
+  error               String?
+
+  businessesChecked   Int       @default(0)
+  providersBackfilled Int       @default(0)
+  crawlTargetsRetried Int       @default(0)
+
+  @@index([startedAt])
+}
+
+// Per (business, embedding provider) retry/backoff state for auto-heal's
+// coverage-gap backfill attempts. Needed once checks run every 30 minutes
+// instead of once/day — without this, a provider that's still broken
+// after one attempt would get re-attempted on every single 30-minute
+// check instead of backing off. Same formula as CrawlTarget's retry
+// fields: min(1h * 2^retryCount, 24h).
+model EmbeddingBackfillCooldown {
+  businessId  String
+  provider    String
+  retryCount  Int       @default(0)
+  nextRetryAt DateTime?
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  @@id([businessId, provider])
+}
+
+// Replaces storage/embeddings/knowledge.json, which corrupted under
+// concurrent writes (read-whole-file/mutate/write-whole-file with no
+// row-level atomicity). One row per (document chunk x embedding
+// provider) vector. No pgvector — not installed on the local Postgres
+// and installing it on Windows needs an admin-level native extension
+// build with no clean path, so search still does brute-force cosine
+// similarity in JS, just reading from Postgres rows instead of a shared
+// file. businessId/embeddingProvider are the only two fields ever
+// filtered on directly (search/coverageStatus/backfill), so they're
+// dedicated columns; everything else (contentHash, pageStatus, url,
+// filename, chunkIndex, etc.) lives in metadata.
+model VectorRecord {
+  id                String   @id
+  documentId        String
+  chunkId           String
+  text              String
+  embedding         Float[]
+
+  businessId        String?
+  embeddingProvider String?
+  metadata          Json?
+
+  createdAt         DateTime @default(now())
+
+  @@index([businessId, embeddingProvider])
+  @@index([documentId])
 }
 
 // Every save (full update or incremental append) inserts a new row —

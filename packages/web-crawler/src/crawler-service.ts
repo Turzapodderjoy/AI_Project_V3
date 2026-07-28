@@ -2,7 +2,7 @@ import { createHash } from "crypto";
 
 import { prisma } from "@ai-chat-platform/database";
 import { IndexingService } from "@ai-chat-platform/indexing";
-import { VectorStoreManager, JsonProvider } from "@ai-chat-platform/vector-store";
+import type { VectorStoreManager } from "@ai-chat-platform/vector-store";
 
 import { crawlSite } from "./crawler";
 import { estimatePageCount } from "./estimate";
@@ -67,14 +67,15 @@ function hashText(text: string): string {
 }
 
 export class CrawlerService {
-  private readonly vectorStore = new VectorStoreManager(new JsonProvider());
-
   // Takes the shared IndexingService (built once in bootstrap, wired to
-  // the shared rotating EmbeddingManager) instead of constructing its
-  // own — a private `new IndexingService()` here used to mean crawled
-  // pages never got the dashboard-activated/rotating embedding
-  // providers everything else uses, only a raw unconfigured Jina instance.
-  constructor(private readonly indexing: IndexingService) {}
+  // the shared rotating EmbeddingManager) and the shared VectorStoreManager
+  // instead of constructing its own of either — a private
+  // `new VectorStoreManager(new JsonProvider())` here used to mean this
+  // class read/wrote its own separate instance of the store.
+  constructor(
+    private readonly indexing: IndexingService,
+    private readonly vectorStore: VectorStoreManager
+  ) {}
 
   /** Creates (or re-queues) a target. Does NOT crawl — the caller runs
    * `runCrawl` separately, typically in the background, so a live

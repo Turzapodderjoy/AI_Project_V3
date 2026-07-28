@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "@ai-chat-platform/embedding-manager": "workspace:*",
-    "@ai-chat-platform/gemini": "workspace:*",
     "@ai-chat-platform/mistral": "workspace:*"
   }
 }
