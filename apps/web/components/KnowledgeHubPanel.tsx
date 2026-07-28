@@ -38,6 +38,17 @@ interface CrawlTarget {
 
 const ACTIVE_STATUSES = new Set(["queued", "crawling"]);
 
+/** Why a provider isn't at 100% coverage — checked in the order that
+ * actually blocks embedding (a disabled provider never gets tried at
+ * all, regardless of whether it has a key or is healthy). */
+function coverageGapReason(c: CoverageEntry, pct: number): string | null {
+  if (pct === 100) return null;
+  if (!c.enabled) return "Provider is turned off";
+  if (!c.hasUsableKey) return "No API key configured";
+  if (!c.healthy) return "Provider is currently unreachable/unhealthy";
+  return "Not backfilled yet";
+}
+
 /** Reused as-is by both the mother dashboard (no businessId = everything)
  * and every per-client dashboard (/dashboard/[businessId]) — one component,
  * so any change here applies everywhere at once. */
@@ -315,6 +326,7 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
                   <th style={cellStyle}>Has key</th>
                   <th style={cellStyle}>Chunks embedded</th>
                   <th style={cellStyle}>Coverage</th>
+                  <th style={cellStyle}>Reason if incomplete</th>
                   <th style={cellStyle}>Last indexed</th>
                   <th style={cellStyle}></th>
                 </tr>
@@ -322,6 +334,7 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
               <tbody>
                 {coverage.map((c) => {
                   const pct = c.totalChunks === 0 ? 100 : Math.round((c.chunksEmbedded / c.totalChunks) * 100);
+                  const reason = coverageGapReason(c, pct);
                   return (
                     <tr key={c.provider}>
                       <td style={cellStyle}>{c.provider}</td>
@@ -334,6 +347,7 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
                       <td style={cellStyle}>
                         {pct === 100 ? "✅ 100%" : `⚠️ ${pct}%`}
                       </td>
+                      <td style={cellStyle}>{reason ?? "—"}</td>
                       <td style={cellStyle}>
                         {c.lastIndexedAt ? new Date(c.lastIndexedAt).toLocaleString() : "—"}
                       </td>
@@ -352,7 +366,7 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
                 })}
                 {coverage.length === 0 && (
                   <tr>
-                    <td style={cellStyle} colSpan={8}>
+                    <td style={cellStyle} colSpan={9}>
                       No embedding providers registered yet.
                     </td>
                   </tr>

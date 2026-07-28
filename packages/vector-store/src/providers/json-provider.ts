@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import crypto from "crypto";
 
 import type {
   SearchResult,
@@ -15,6 +16,29 @@ export class JsonProvider implements VectorStore {
     "knowledge.json"
   );
 
+  // Every mutating method below does read-full-file -> mutate-in-memory ->
+  // write-full-file. Two such calls running concurrently (a crawl's own
+  // background writes racing a manual backfill, or two crawls at once)
+  // can corrupt the file — found live: two overlapping writes produced a
+  // file containing one complete, valid JSON array followed immediately
+  // by a raw fragment of a second, unrelated write, permanently losing
+  // every record that belonged to whichever write didn't "win". This
+  // queue serializes every mutation through this one process so two
+  // writes can never overlap, no matter how many concurrent callers
+  // there are. (Scoped to this process — if this ever runs as multiple
+  // separate processes/serverless instances sharing the same file, a
+  // real database or a cross-process lock would be needed instead.)
+  private writeQueue: Promise<unknown> = Promise.resolve();
+
+  private enqueue<T>(fn: () => Promise<T>): Promise<T> {
+    const result = this.writeQueue.then(fn, fn);
+    this.writeQueue = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
+  }
+
   async initialize(): Promise<void> {
     await fs.mkdir(path.dirname(this.filePath), {
       recursive: true,
@@ -23,34 +47,24 @@ export class JsonProvider implements VectorStore {
     try {
       await fs.access(this.filePath);
     } catch {
-      await fs.writeFile(
-        this.filePath,
-        JSON.stringify([], null, 2),
-        "utf8"
-      );
+      await this.writeAtomic([]);
     }
   }
 
   async upsert(records: VectorRecord[]): Promise<void> {
-    const current = await this.read();
+    return this.enqueue(async () => {
+      const current = await this.read();
 
-    const map = new Map<string, VectorRecord>(
-      current.map((record) => [record.id, record])
-    );
+      const map = new Map<string, VectorRecord>(
+        current.map((record) => [record.id, record])
+      );
 
-    for (const record of records) {
-      map.set(record.id, record);
-    }
+      for (const record of records) {
+        map.set(record.id, record);
+      }
 
-    await fs.writeFile(
-      this.filePath,
-      JSON.stringify(
-        [...map.values()],
-        null,
-        2
-      ),
-      "utf8"
-    );
+      await this.writeAtomic([...map.values()]);
+    });
   }
 
   async search(
@@ -103,15 +117,13 @@ export class JsonProvider implements VectorStore {
   async deleteByDocumentIds(documentIds: string[]): Promise<void> {
     if (documentIds.length === 0) return;
 
-    const current = await this.read();
-    const toDelete = new Set(documentIds);
-    const remaining = current.filter((r) => !toDelete.has(r.documentId));
+    return this.enqueue(async () => {
+      const current = await this.read();
+      const toDelete = new Set(documentIds);
+      const remaining = current.filter((r) => !toDelete.has(r.documentId));
 
-    await fs.writeFile(
-      this.filePath,
-      JSON.stringify(remaining, null, 2),
-      "utf8"
-    );
+      await this.writeAtomic(remaining);
+    });
   }
 
   async updateMetadata(
@@ -124,20 +136,18 @@ export class JsonProvider implements VectorStore {
   async updateMetadataMany(documentIds: string[], patch: Record<string, unknown>): Promise<void> {
     if (documentIds.length === 0) return;
 
-    const current = await this.read();
-    const targets = new Set(documentIds);
+    return this.enqueue(async () => {
+      const current = await this.read();
+      const targets = new Set(documentIds);
 
-    const updated = current.map((r) =>
-      targets.has(r.documentId)
-        ? { ...r, metadata: { ...r.metadata, ...patch } }
-        : r
-    );
+      const updated = current.map((r) =>
+        targets.has(r.documentId)
+          ? { ...r, metadata: { ...r.metadata, ...patch } }
+          : r
+      );
 
-    await fs.writeFile(
-      this.filePath,
-      JSON.stringify(updated, null, 2),
-      "utf8"
-    );
+      await this.writeAtomic(updated);
+    });
   }
 
   private cosineSimilarity(
@@ -175,16 +185,42 @@ export class JsonProvider implements VectorStore {
     return dotProduct / (magnitudeA * magnitudeB);
   }
 
-  private async read(): Promise<VectorRecord[]> {
-    try {
-      const text = await fs.readFile(
-        this.filePath,
-        "utf8"
-      );
+  /** Write to a temp file then rename over the real path — rename is
+   * atomic on the same filesystem, so a reader can never observe a
+   * half-written file even if the process crashes mid-write. This alone
+   * doesn't stop two concurrent CALLERS from racing (that's what
+   * enqueue() is for) but it does stop a single write from ever leaving
+   * the file in a corrupted, half-flushed state. */
+  private async writeAtomic(records: VectorRecord[]): Promise<void> {
+    const tmpPath = `${this.filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+    await fs.writeFile(tmpPath, JSON.stringify(records, null, 2), "utf8");
+    await fs.rename(tmpPath, this.filePath);
+  }
 
+  private async read(): Promise<VectorRecord[]> {
+    let text: string;
+
+    try {
+      text = await fs.readFile(this.filePath, "utf8");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        return [];
+      }
+      throw err;
+    }
+
+    try {
       return JSON.parse(text) as VectorRecord[];
-    } catch {
-      return [];
+    } catch (err) {
+      // Never silently treat a corrupted file as "empty" — a caller doing
+      // read -> merge -> write would then overwrite the corrupted file
+      // with JUST its own new records, permanently destroying whatever
+      // was actually on disk (even the parts that were still salvageable).
+      // Failing loudly here is what makes corruption visible immediately
+      // instead of manifesting later as silently-empty search results.
+      throw new Error(
+        `Vector store file is corrupted and could not be parsed as JSON: ${(err as Error).message}`
+      );
     }
   }
 }
