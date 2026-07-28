@@ -26,12 +26,50 @@ export class VectorStoreRetriever implements Retriever {
       embeddingProvider = embedded.provider;
     }
 
-    const results = await this.vectorStore.search(
+    let results = await this.vectorStore.search(
       embedding,
       options.limit ?? 5,
       options.businessId,
       embeddingProvider
     );
+
+    // Embedding rotation means this query's provider is essentially
+    // random from the caller's point of view — it has nothing to do
+    // with which provider actually embedded this business's stored
+    // content. If they don't match, VectorStore.search()'s provider
+    // filter correctly (and silently) returns zero records, even though
+    // the business may have plenty of real, relevant content sitting
+    // under a different provider's vectors. Without this fallback,
+    // answer quality would depend on which provider rotation happened
+    // to pick for THIS particular query — exactly what must never
+    // happen. Retry with every other registered provider before
+    // concluding retrieval genuinely found nothing.
+    if (results.length === 0) {
+      for (const candidate of this.embeddings.getProviderNames()) {
+        if (candidate === embeddingProvider) {
+          continue;
+        }
+
+        try {
+          const retried = await this.embeddings.embedWithProvider(candidate, query);
+          const retriedResults = await this.vectorStore.search(
+            retried.embedding,
+            options.limit ?? 5,
+            options.businessId,
+            retried.provider
+          );
+
+          if (retriedResults.length > 0) {
+            results = retriedResults;
+            break;
+          }
+        } catch {
+          // That provider is unavailable/failed too — try the next one.
+          // Genuinely running out of providers just means retrieval
+          // really does have nothing, which is the correct outcome.
+        }
+      }
+    }
 
     // Cosine similarity scores are in [-1, 1], unlike the keyword
     // scorer's integer match counts, so this retriever's default

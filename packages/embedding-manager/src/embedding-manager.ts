@@ -73,6 +73,13 @@ export class EmbeddingManager {
     return Array.from(this.providers.values()).map((entry) => entry.provider);
   }
 
+  /** Every registered provider's name — used by callers (e.g.
+   * VectorStoreRetriever) that need to retry against a SPECIFIC other
+   * provider, not just whichever one rotation happens to pick next. */
+  getProviderNames(): string[] {
+    return Array.from(this.providers.keys());
+  }
+
   hasProvider(name: string): boolean {
     return this.providers.has(name.toLowerCase());
   }
@@ -131,6 +138,33 @@ export class EmbeddingManager {
     );
   }
 
+  /** Embeds with ONE specific named provider — bypasses rotation
+   * entirely. For a caller that already tried the rotated pick and got
+   * no usable results back (e.g. a retrieval whose stored vectors turn
+   * out to belong to a different provider's space than the rotated
+   * query embedding) and needs to explicitly retry a particular other
+   * provider instead of whatever rotation would hand it next. */
+  async embedWithProvider(providerName: string, text: string): Promise<EmbeddingResult> {
+    const entry = this.providers.get(providerName.toLowerCase());
+
+    if (!entry) {
+      throw new Error(`Embedding provider ${providerName} is not registered.`);
+    }
+
+    const failures: Error[] = [];
+    const result = await this.attemptProvider(
+      entry,
+      (provider, key) => provider.embed(text, key),
+      failures
+    );
+
+    if (result === undefined) {
+      throw new AllProvidersFailedError(failures);
+    }
+
+    return result;
+  }
+
   /** Same structure as AIManager.generate(): try each enabled, healthy
    * provider in order, rotating through its keys, until one succeeds or
    * every provider/key combination has failed. */
@@ -155,83 +189,103 @@ export class EmbeddingManager {
     ];
 
     for (const entry of orderedEntries) {
-      const provider = entry.provider;
-      const providerName = provider.name;
+      const result = await this.attemptProvider(entry, operation, failures);
 
-      if (this.disabledProviders.has(providerName.toLowerCase())) {
-        continue;
-      }
-
-      if (!(await this.isProviderHealthy(entry))) {
-        continue;
-      }
-
-      if (!entry.keyManager.hasAnyUsableKey(providerName)) {
-        failures.push(
-          new ProviderUnavailableError(
-            `Embedding provider ${providerName} has no usable API keys.`
-          )
-        );
-        continue;
-      }
-
-      let key = entry.keyManager.getAvailableKey(providerName);
-
-      while (key) {
-        const currentKey = key;
-
-        try {
-          const result = await retryWithBackoff(
-            () => operation(provider, currentKey.value),
-            {
-              attempts: this.maxRetriesPerKey + 1,
-              baseDelayMs: 100,
-              maxDelayMs: 1000,
-              shouldRetry: (error) => error instanceof RateLimitedError,
-            }
-          );
-
-          entry.keyManager.markKeySuccess(providerName, currentKey.id);
-          this.healthTracker.recordSuccess(providerName);
-
-          const tokens = Array.isArray(result)
-            ? result.reduce((sum, r) => sum + (r.tokens ?? 0), 0)
-            : (result.tokens ?? 0);
-          this.usageTracker.recordSuccess(providerName, tokens);
-
-          return result;
-        } catch (cause) {
-          const error = cause instanceof Error ? cause : new Error(String(cause));
-
-          this.usageTracker.recordFailure(providerName);
-
-          if (error instanceof InvalidApiKeyError) {
-            entry.keyManager.markKeyFailed(providerName, currentKey.id, true);
-            failures.push(error);
-            key = entry.keyManager.getAvailableKey(providerName);
-            continue;
-          }
-
-          if (error instanceof RateLimitedError) {
-            entry.keyManager.markKeyFailed(providerName, currentKey.id);
-            this.healthTracker.recordFailure(providerName);
-            failures.push(error);
-            key = entry.keyManager.getAvailableKey(providerName);
-            continue;
-          }
-
-          // Same "must cool the key down here too" fix as AIManager —
-          // otherwise an unclassified error leaves the key "available"
-          // and this loop spins on it forever instead of moving on.
-          entry.keyManager.markKeyFailed(providerName, currentKey.id);
-          this.healthTracker.recordFailure(providerName);
-          failures.push(error);
-          key = entry.keyManager.getAvailableKey(providerName);
-        }
+      if (result !== undefined) {
+        return result;
       }
     }
 
     throw new AllProvidersFailedError(failures);
+  }
+
+  /** One provider's full attempt: skip if disabled/unhealthy/keyless,
+   * otherwise rotate through its keys until one works or all are
+   * exhausted. Returns undefined (not a throw) on exhaustion so both
+   * run()'s rotation loop and embedWithProvider()'s single-provider call
+   * can share this without every non-fatal "this provider didn't work"
+   * case needing its own try/catch at the call site. */
+  private async attemptProvider<T extends EmbeddingResult | EmbeddingResult[]>(
+    entry: RegisteredProvider,
+    operation: (provider: EmbeddingProvider, apiKey: string) => Promise<T>,
+    failures: Error[]
+  ): Promise<T | undefined> {
+    const provider = entry.provider;
+    const providerName = provider.name;
+
+    if (this.disabledProviders.has(providerName.toLowerCase())) {
+      return undefined;
+    }
+
+    if (!(await this.isProviderHealthy(entry))) {
+      return undefined;
+    }
+
+    if (!entry.keyManager.hasAnyUsableKey(providerName)) {
+      failures.push(
+        new ProviderUnavailableError(
+          `Embedding provider ${providerName} has no usable API keys.`
+        )
+      );
+      return undefined;
+    }
+
+    let key = entry.keyManager.getAvailableKey(providerName);
+
+    while (key) {
+      const currentKey = key;
+
+      try {
+        const result = await retryWithBackoff(
+          () => operation(provider, currentKey.value),
+          {
+            attempts: this.maxRetriesPerKey + 1,
+            baseDelayMs: 100,
+            maxDelayMs: 1000,
+            shouldRetry: (error) => error instanceof RateLimitedError,
+          }
+        );
+
+        entry.keyManager.markKeySuccess(providerName, currentKey.id);
+        this.healthTracker.recordSuccess(providerName);
+
+        const tokens = Array.isArray(result)
+          ? result.reduce((sum, r) => sum + (r.tokens ?? 0), 0)
+          : (result.tokens ?? 0);
+        this.usageTracker.recordSuccess(providerName, tokens);
+
+        return result;
+      } catch (cause) {
+        const error = cause instanceof Error ? cause : new Error(String(cause));
+
+        this.usageTracker.recordFailure(providerName);
+
+        if (error instanceof InvalidApiKeyError) {
+          entry.keyManager.markKeyFailed(providerName, currentKey.id, true);
+          failures.push(error);
+          key = entry.keyManager.getAvailableKey(providerName);
+          continue;
+        }
+
+        if (error instanceof RateLimitedError) {
+          entry.keyManager.markKeyFailed(providerName, currentKey.id);
+          this.healthTracker.recordFailure(providerName);
+          failures.push(error);
+          key = entry.keyManager.getAvailableKey(providerName);
+          continue;
+        }
+
+        // Same "must cool the key down here too" fix as AIManager —
+        // otherwise an unclassified error leaves the key "available"
+        // and this loop spins on it forever instead of moving on.
+        entry.keyManager.markKeyFailed(providerName, currentKey.id);
+        this.healthTracker.recordFailure(providerName);
+        failures.push(error);
+        key = entry.keyManager.getAvailableKey(providerName);
+      }
+    }
+
+    return undefined;
   }
 
   private async isProviderHealthy(entry: RegisteredProvider): Promise<boolean> {
