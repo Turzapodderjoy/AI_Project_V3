@@ -81,6 +81,12 @@ export class IndexingService {
         // with what actually embedded it.
         embeddingProvider:
           embeddings[i]!.provider,
+        // Universal "when was this chunk (re)indexed" timestamp — covers
+        // both uploads (which had no timestamp at all before this) and
+        // crawled pages (which already had their own lastCrawledAt, kept
+        // for backward compatibility since existing rows only have that).
+        indexedAt:
+          new Date().toISOString(),
         ...(request.metadata ?? {})
       }
     }));

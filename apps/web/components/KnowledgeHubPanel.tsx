@@ -11,6 +11,7 @@ interface KnowledgeDocument {
   chunks: number;
   status: string;
   lastCrawledAt: string | null;
+  lastUpdated: string | null;
 }
 
 interface CrawlTarget {
@@ -198,6 +199,7 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
               <th style={cellStyle}>Filename</th>
               <th style={cellStyle}>Status</th>
               <th style={cellStyle}>Chunks</th>
+              <th style={cellStyle}>Last updated</th>
               <th style={cellStyle}>Document ID</th>
               <th style={cellStyle}></th>
             </tr>
@@ -211,6 +213,9 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
                 </td>
                 <td style={cellStyle}>{d.chunks}</td>
                 <td style={cellStyle}>
+                  {d.lastUpdated ? new Date(d.lastUpdated).toLocaleString() : "—"}
+                </td>
+                <td style={cellStyle}>
                   <code style={{ fontSize: 11 }}>{d.documentId}</code>
                 </td>
                 <td style={cellStyle}>
@@ -220,7 +225,7 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
             ))}
             {documents.length === 0 && (
               <tr>
-                <td style={cellStyle} colSpan={5}>
+                <td style={cellStyle} colSpan={6}>
                   Nothing indexed yet — upload a file or crawl a site above.
                 </td>
               </tr>

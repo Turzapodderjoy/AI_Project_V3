@@ -16,6 +16,9 @@ export interface KnowledgeDocumentSummary {
   /** Only meaningful for crawler-sourced pages; uploaded files show "uploaded". */
   status: string;
   lastCrawledAt: string | null;
+  /** When this document was last (re)indexed — covers both uploads and
+   * crawls. Null only for chunks indexed before this field existed. */
+  lastUpdated: string | null;
 }
 
 export class AdminController {
@@ -112,10 +115,22 @@ export class AdminController {
         continue;
       }
 
+      const lastCrawledAt = (record.metadata?.lastCrawledAt as string | undefined) ?? null;
+      // indexedAt is the more universal field (uploads never had a
+      // timestamp before it existed) — falls back to lastCrawledAt for
+      // chunks indexed before indexedAt was introduced.
+      const indexedAt = (record.metadata?.indexedAt as string | undefined) ?? lastCrawledAt;
+
       const existing = byDocument.get(record.documentId);
 
       if (existing) {
         existing.chunks += 1;
+        // Chunks of the same document can carry slightly different
+        // timestamps (batched, but not guaranteed identical) — the
+        // document's "last updated" is whichever chunk is newest.
+        if (indexedAt && (!existing.lastUpdated || indexedAt > existing.lastUpdated)) {
+          existing.lastUpdated = indexedAt;
+        }
         continue;
       }
 
@@ -127,7 +142,8 @@ export class AdminController {
         status:
           (record.metadata?.pageStatus as string | undefined) ??
           (record.metadata?.source === "crawler" ? "new" : "uploaded"),
-        lastCrawledAt: (record.metadata?.lastCrawledAt as string | undefined) ?? null,
+        lastCrawledAt,
+        lastUpdated: indexedAt,
       });
     }
 
