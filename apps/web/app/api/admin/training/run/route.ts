@@ -9,6 +9,6 @@ import { getApp } from "../../../../../lib/app";
  * action, not the scheduled job. */
 export async function POST() {
   const app = await getApp();
-  const result = await app.container.router.training.runPipeline();
+  const result = await app.container.router.training.runPipeline("manual");
   return NextResponse.json(result);
 }

@@ -25,6 +25,30 @@ interface PromptSuggestion {
   decidedAt: string | null;
 }
 
+interface RunSuggestion {
+  id: string;
+  businessId: string;
+  kind: string;
+  proposedAppendText: string | null;
+  proposedSystemPrompt: string | null;
+  reasoning: string;
+  status: string;
+}
+
+interface PipelineRun {
+  id: string;
+  triggeredBy: "cron" | "manual";
+  startedAt: string;
+  finishedAt: string | null;
+  conversationsProcessed: number;
+  kept: number;
+  dropped: number;
+  failed: number;
+  businessesChecked: number;
+  suggestionsCreated: number;
+  suggestions: RunSuggestion[];
+}
+
 const VERDICT_LABEL: Record<string, string> = {
   kept: "✅ Kept",
   dropped_spam: "🚫 Dropped (spam)",
@@ -43,8 +67,10 @@ export function TrainingPanel() {
   const [analyses, setAnalyses] = useState<ChatAnalysis[] | null>(null);
   const [pending, setPending] = useState<PromptSuggestion[] | null>(null);
   const [decided, setDecided] = useState<PromptSuggestion[] | null>(null);
+  const [runs, setRuns] = useState<PipelineRun[] | null>(null);
   const [expandedAnalysisId, setExpandedAnalysisId] = useState<string | null>(null);
   const [expandedSuggestionId, setExpandedSuggestionId] = useState<string | null>(null);
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [deciding, setDeciding] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState("");
@@ -60,6 +86,10 @@ export function TrainingPanel() {
         setPending(data.pending);
         setDecided(data.decided);
       });
+
+    fetch("/api/admin/training/runs")
+      .then((r) => r.json())
+      .then((data) => setRuns(data.runs));
   }
 
   useEffect(refresh, []);
@@ -136,6 +166,80 @@ export function TrainingPanel() {
         {running ? "Running… (this can take a minute)" : "Run now"}
       </button>
       {message && <p style={{ fontSize: 13, opacity: 0.8, marginTop: 8 }}>{message}</p>}
+
+      <h3 style={{ marginTop: 24 }}>Run history</h3>
+      <p style={{ opacity: 0.6 }}>
+        Every time the pipeline has run (scheduled or manual), with what
+        it did and any suggestions that run produced.
+      </p>
+      {!runs && <p>Loading…</p>}
+      {runs && (
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={cellStyle}>When</th>
+              <th style={cellStyle}>Trigger</th>
+              <th style={cellStyle}>Status</th>
+              <th style={cellStyle}>Conversations</th>
+              <th style={cellStyle}>Suggestions</th>
+              <th style={cellStyle}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {runs.map((r) => (
+              <Fragment key={r.id}>
+                <tr>
+                  <td style={cellStyle}>{new Date(r.startedAt).toLocaleString()}</td>
+                  <td style={cellStyle}>{r.triggeredBy === "manual" ? "👤 Manual" : "⏰ Scheduled"}</td>
+                  <td style={cellStyle}>
+                    {r.finishedAt
+                      ? `✅ Done (${r.kept} kept, ${r.dropped} dropped, ${r.failed} failed)`
+                      : "⏳ Running…"}
+                  </td>
+                  <td style={cellStyle}>{r.conversationsProcessed}</td>
+                  <td style={cellStyle}>{r.suggestionsCreated}</td>
+                  <td style={cellStyle}>
+                    {r.suggestions.length > 0 && (
+                      <button onClick={() => setExpandedRunId(expandedRunId === r.id ? null : r.id)}>
+                        {expandedRunId === r.id ? "Hide" : "View suggestions"}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+                {expandedRunId === r.id && (
+                  <tr>
+                    <td style={cellStyle} colSpan={6}>
+                      {r.suggestions.map((s) => (
+                        <div key={s.id} style={{ marginBottom: 12 }}>
+                          <div style={{ fontSize: 12, opacity: 0.7 }}>
+                            <code>{s.businessId}</code> · {s.kind} ·{" "}
+                            {s.status === "pending"
+                              ? "⏳ pending"
+                              : s.status === "accepted"
+                                ? "✅ accepted"
+                                : "❌ declined"}
+                          </div>
+                          <div style={{ fontSize: 12, marginTop: 2 }}>{s.reasoning}</div>
+                          <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "4px 0 0" }}>
+                            {s.proposedAppendText ?? s.proposedSystemPrompt}
+                          </pre>
+                        </div>
+                      ))}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+            {runs.length === 0 && (
+              <tr>
+                <td style={cellStyle} colSpan={6}>
+                  No runs yet — click Run now above, or wait for the 5:00am BST cron.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      )}
 
       <h3 style={{ marginTop: 24 }}>Pending suggestions</h3>
       {!pending && <p>Loading…</p>}

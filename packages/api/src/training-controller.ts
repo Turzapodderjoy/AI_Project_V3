@@ -2,6 +2,7 @@ import {
   ChatAnalysisService,
   ChatAnalysisPipeline,
   PromptSuggestionService,
+  PipelineRunService,
 } from "@ai-chat-platform/training-pipeline";
 import { AiConfigService } from "@ai-chat-platform/ai-config";
 
@@ -17,17 +18,36 @@ export class TrainingController {
     private readonly analysis: ChatAnalysisService,
     private readonly aiConfig: AiConfigService,
     private readonly pipeline: ChatAnalysisPipeline,
-    private readonly suggestions: PromptSuggestionService
+    private readonly suggestions: PromptSuggestionService,
+    private readonly runs_: PipelineRunService
   ) {}
 
-  /** The daily 5am BST cron's single entry point — analyzes a batch of
-   * unprocessed conversations, then checks every business for whether
-   * enough new signal has accumulated to propose an AI Brain change. */
-  async runPipeline() {
+  /** The daily 5am BST cron's entry point (triggeredBy "cron") — also
+   * called directly by the dashboard's manual "Run now" button
+   * (triggeredBy "manual"). Records a PipelineRun row wrapping the whole
+   * thing so the Training & Insights panel's run-history table has a
+   * permanent "did it run, and what happened" record, and tags every
+   * suggestion created this pass with the run that produced it. */
+  async runPipeline(triggeredBy: "cron" | "manual" = "cron") {
+    const runId = await this.runs_.start(triggeredBy);
+
     const analysisResult = await this.pipeline.run();
-    const suggestionResult = await this.suggestions.run();
+    const suggestionResult = await this.suggestions.run(runId);
+
+    await this.runs_.finish(runId, {
+      conversationsProcessed: analysisResult.processed,
+      kept: analysisResult.kept,
+      dropped: analysisResult.dropped,
+      failed: analysisResult.failed,
+      businessesChecked: suggestionResult.businessesChecked,
+      suggestionsCreated: suggestionResult.suggestionsCreated,
+    });
 
     return { analysis: analysisResult, suggestions: suggestionResult };
+  }
+
+  runs(limit?: number) {
+    return this.runs_.list(limit);
   }
 
   analyses(businessId?: string) {

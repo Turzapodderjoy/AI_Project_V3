@@ -18,6 +18,7 @@ import {
   ReasoningClient,
   ChatAnalysisPipeline,
   PromptSuggestionService,
+  PipelineRunService,
 } from "@ai-chat-platform/training-pipeline";
 import { ChannelConnectionService, ChannelAppCredentialService } from "@ai-chat-platform/channel-connections";
 import { ChatController } from "@ai-chat-platform/api";
@@ -122,6 +123,9 @@ export class Container {
         tenants
       );
 
+    const pipelineRuns =
+      new PipelineRunService();
+
     const channelConnections =
       new ChannelConnectionService();
 
@@ -152,7 +156,8 @@ export class Container {
           chatAnalysisService,
           aiConfig,
           chatAnalysisPipeline,
-          promptSuggestionService
+          promptSuggestionService,
+          pipelineRuns
         ),
         new ChannelController(
           channelConnections,

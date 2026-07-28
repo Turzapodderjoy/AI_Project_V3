@@ -28,14 +28,16 @@ export class PromptSuggestionService {
   /** Runs the suggestion pass across every client business — the
    * platform-wide ("__platform__") prompt is deliberately excluded,
    * since it's the mother dashboard's shared default, not any one
-   * client's real usage pattern. */
-  async run(): Promise<{ businessesChecked: number; suggestionsCreated: number }> {
+   * client's real usage pattern. `pipelineRunId` (if given) tags every
+   * suggestion created this pass with the PipelineRun that produced it,
+   * for the Training & Insights panel's run-history table. */
+  async run(pipelineRunId?: string): Promise<{ businessesChecked: number; suggestionsCreated: number }> {
     const businesses = await this.tenants.listAll();
 
     let suggestionsCreated = 0;
 
     for (const business of businesses) {
-      const created = await this.checkOne(business.id);
+      const created = await this.checkOne(business.id, pipelineRunId);
       if (created) {
         suggestionsCreated += 1;
       }
@@ -44,7 +46,7 @@ export class PromptSuggestionService {
     return { businessesChecked: businesses.length, suggestionsCreated };
   }
 
-  private async checkOne(businessId: string): Promise<boolean> {
+  private async checkOne(businessId: string, pipelineRunId?: string): Promise<boolean> {
     const lastSuggestionAt = await this.analysis.lastSuggestionAt(businessId);
     const findings = await this.analysis.keptFindingsSince(businessId, lastSuggestionAt);
 
@@ -97,6 +99,7 @@ export class PromptSuggestionService {
       proposedSystemPrompt: null,
       proposedAppendText: parsed.proposedAppendText,
       reasoning: parsed.reasoning ?? "(no reasoning text returned)",
+      pipelineRunId,
     });
 
     return true;

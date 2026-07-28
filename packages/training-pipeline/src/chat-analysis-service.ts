@@ -226,6 +226,7 @@ export class ChatAnalysisService {
     proposedSystemPrompt?: string | null;
     proposedAppendText?: string | null;
     reasoning: string;
+    pipelineRunId?: string | null;
   }): Promise<PromptSuggestionRecord> {
     const created = await prisma.promptSuggestion.create({
       data: {
@@ -234,6 +235,7 @@ export class ChatAnalysisService {
         proposedSystemPrompt: params.proposedSystemPrompt ?? null,
         proposedAppendText: params.proposedAppendText ?? null,
         reasoning: params.reasoning,
+        pipelineRunId: params.pipelineRunId ?? null,
       },
     });
 

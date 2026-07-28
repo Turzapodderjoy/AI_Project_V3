@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   }
 
   const app = await getApp();
-  const result = await app.container.router.training.runPipeline();
+  const result = await app.container.router.training.runPipeline("cron");
 
   return NextResponse.json(result);
 }
