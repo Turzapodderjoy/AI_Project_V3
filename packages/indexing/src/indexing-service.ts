@@ -192,4 +192,49 @@ export class IndexingService {
 
     return { chunksChecked: byChunk.size, chunksBackfilled, vectorsAdded: newRecords.length };
   }
+
+  /** Read-only per-provider coverage report for one business — same
+   * chunk-grouping logic as backfillAllProviders(), but never embeds
+   * anything, just reports what's already there. Backs the Knowledge
+   * Hub's "per embedding provider" status table. */
+  async coverageStatus(businessId: string): Promise<
+    Array<{ provider: string; chunksEmbedded: number; totalChunks: number; lastIndexedAt: string | null }>
+  > {
+    const all = await this.vectorStore.listAll();
+    const scoped = all.filter((r) => r.metadata?.businessId === businessId);
+
+    const byChunk = new Map<string, VectorRecord[]>();
+    for (const record of scoped) {
+      const key = `${record.documentId}::${record.chunkId}`;
+      const list = byChunk.get(key) ?? [];
+      list.push(record);
+      byChunk.set(key, list);
+    }
+
+    const totalChunks = byChunk.size;
+    const providerNames = this.embeddingManager.getProviderNames();
+
+    return providerNames.map((providerName) => {
+      let chunksEmbedded = 0;
+      let lastIndexedAt: string | null = null;
+
+      for (const records of byChunk.values()) {
+        // Untagged records predate per-provider tagging and were all
+        // embedded by Jina — same convention as json-provider.ts's search().
+        const match = records.find(
+          (r) => ((r.metadata?.embeddingProvider as string | undefined) ?? "jina") === providerName
+        );
+
+        if (match) {
+          chunksEmbedded += 1;
+          const indexedAt = match.metadata?.indexedAt as string | undefined;
+          if (indexedAt && (!lastIndexedAt || indexedAt > lastIndexedAt)) {
+            lastIndexedAt = indexedAt;
+          }
+        }
+      }
+
+      return { provider: providerName, chunksEmbedded, totalChunks, lastIndexedAt };
+    });
+  }
 }

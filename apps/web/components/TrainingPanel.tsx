@@ -46,6 +46,7 @@ export function TrainingPanel() {
   const [expandedAnalysisId, setExpandedAnalysisId] = useState<string | null>(null);
   const [expandedSuggestionId, setExpandedSuggestionId] = useState<string | null>(null);
   const [deciding, setDeciding] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
   const [message, setMessage] = useState("");
 
   function refresh() {
@@ -62,6 +63,33 @@ export function TrainingPanel() {
   }
 
   useEffect(refresh, []);
+
+  /** Same pipeline the 5am BST cron runs — lets an admin force a run
+   * right after QA'ing a chat or changing something, instead of waiting
+   * for the next scheduled run. Can take a while (each conversation is a
+   * real reasoning-LLM call, paced ~4s apart to stay under Groq's rate
+   * limit), so this just waits for the response rather than polling. */
+  async function runNow() {
+    setRunning(true);
+    setMessage("");
+
+    try {
+      const res = await fetch("/api/admin/training/run", { method: "POST" });
+      const result = await res.json();
+
+      setMessage(
+        res.ok
+          ? `Run complete — analyzed ${result.analysis.processed} conversation(s) (${result.analysis.kept} kept), ${result.suggestions.suggestionsCreated} new suggestion(s) created.`
+          : `Error: ${result.error}`
+      );
+
+      if (res.ok) {
+        refresh();
+      }
+    } finally {
+      setRunning(false);
+    }
+  }
 
   async function decide(id: string, action: "accept" | "decline") {
     setDeciding(id);
@@ -104,7 +132,12 @@ export function TrainingPanel() {
         until you Accept or Decline it.
       </p>
 
-      <h3>Pending suggestions</h3>
+      <button onClick={runNow} disabled={running}>
+        {running ? "Running… (this can take a minute)" : "Run now"}
+      </button>
+      {message && <p style={{ fontSize: 13, opacity: 0.8, marginTop: 8 }}>{message}</p>}
+
+      <h3 style={{ marginTop: 24 }}>Pending suggestions</h3>
       {!pending && <p>Loading…</p>}
       {pending && pending.length === 0 && (
         <p style={{ opacity: 0.6 }}>No pending suggestions right now.</p>
@@ -198,8 +231,6 @@ export function TrainingPanel() {
           </tbody>
         </table>
       )}
-
-      {message && <p style={{ fontSize: 13, opacity: 0.8, marginTop: 8 }}>{message}</p>}
 
       <h3 style={{ marginTop: 24 }}>Findings log</h3>
       <p style={{ opacity: 0.6 }}>

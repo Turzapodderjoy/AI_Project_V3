@@ -61,11 +61,25 @@ export class ChatAnalysisService {
       messages: { id: string; role: string; content: string }[];
     }> = [];
 
+    // Conversations pushed into `qualifying` don't get marked processed
+    // here — that happens later, once the pipeline actually analyzes
+    // them. Without tracking which ids this call has already seen, every
+    // subsequent page re-runs the SAME "processedForTraining: false"
+    // query (no cursor) and refetches the exact same still-unprocessed
+    // qualifying conversations, duplicating them into the list — a real
+    // bug found live: the same conversation got attempted 5+ times in
+    // one run, wasting the reasoning LLM's shared rate-limit budget on
+    // redundant retries and crashing on ChatAnalysis's unique
+    // conversationId constraint the first time one of the duplicates
+    // happened to succeed.
+    const seenIds = new Set<string>();
+
     for (let page = 0; page < MAX_PAGES && qualifying.length < limit; page++) {
       const conversations = await prisma.conversation.findMany({
         where: {
           processedForTraining: false,
           messages: { some: {} },
+          id: seenIds.size > 0 ? { notIn: [...seenIds] } : undefined,
         },
         include: {
           messages: { orderBy: { createdAt: "asc" } },
@@ -79,6 +93,7 @@ export class ChatAnalysisService {
       }
 
       for (const c of conversations) {
+        seenIds.add(c.id);
         // A 1-2 message exchange is normally skipped as too short to
         // learn from — but an admin QA'ing exactly that exchange in the
         // Chat Demo tab (one question, one answer, one Pass/Fail click)

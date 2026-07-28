@@ -14,6 +14,16 @@ interface KnowledgeDocument {
   lastUpdated: string | null;
 }
 
+interface CoverageEntry {
+  provider: string;
+  chunksEmbedded: number;
+  totalChunks: number;
+  lastIndexedAt: string | null;
+  enabled: boolean;
+  healthy: boolean;
+  hasUsableKey: boolean;
+}
+
 interface CrawlTarget {
   id: string;
   url: string;
@@ -33,6 +43,7 @@ const ACTIVE_STATUSES = new Set(["queued", "crawling"]);
  * so any change here applies everywhere at once. */
 export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
   const [documents, setDocuments] = useState<KnowledgeDocument[] | null>(null);
+  const [coverage, setCoverage] = useState<CoverageEntry[] | null>(null);
   const [targets, setTargets] = useState<CrawlTarget[] | null>(null);
   const [url, setUrl] = useState("");
   const [adding, setAdding] = useState(false);
@@ -44,6 +55,12 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
     fetch(`/api/admin/knowledge${qs}`)
       .then((r) => r.json())
       .then((data) => setDocuments(data.documents));
+
+    if (businessId) {
+      fetch(`/api/admin/embedding-providers/coverage?businessId=${encodeURIComponent(businessId)}`)
+        .then((r) => r.json())
+        .then((data) => setCoverage(data.coverage));
+    }
   }
 
   function refreshTargets() {
@@ -232,6 +249,65 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
             )}
           </tbody>
         </table>
+      )}
+
+      {businessId && (
+        <>
+          <h3 style={{ marginTop: 24 }}>Embedding coverage by provider</h3>
+          <p style={{ opacity: 0.6 }}>
+            Every chunk gets embedded by EVERY active embedding provider,
+            not just one — this is what makes retrieval work no matter
+            which provider a query happens to be embedded with. 100%
+            coverage means every indexed chunk has a vector from that
+            provider; less than 100% means the daily backfill cron (or a
+            provider being down/disabled) hasn&apos;t caught up yet.
+          </p>
+          {!coverage && <p>Loading…</p>}
+          {coverage && (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={cellStyle}>Provider</th>
+                  <th style={cellStyle}>Enabled</th>
+                  <th style={cellStyle}>Healthy</th>
+                  <th style={cellStyle}>Has key</th>
+                  <th style={cellStyle}>Chunks embedded</th>
+                  <th style={cellStyle}>Coverage</th>
+                  <th style={cellStyle}>Last indexed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {coverage.map((c) => {
+                  const pct = c.totalChunks === 0 ? 100 : Math.round((c.chunksEmbedded / c.totalChunks) * 100);
+                  return (
+                    <tr key={c.provider}>
+                      <td style={cellStyle}>{c.provider}</td>
+                      <td style={cellStyle}>{c.enabled ? "🟢 On" : "⚪ Off"}</td>
+                      <td style={cellStyle}>{c.healthy ? "✅" : "❌"}</td>
+                      <td style={cellStyle}>{c.hasUsableKey ? "✅" : "❌"}</td>
+                      <td style={cellStyle}>
+                        {c.chunksEmbedded} / {c.totalChunks}
+                      </td>
+                      <td style={cellStyle}>
+                        {pct === 100 ? "✅ 100%" : `⚠️ ${pct}%`}
+                      </td>
+                      <td style={cellStyle}>
+                        {c.lastIndexedAt ? new Date(c.lastIndexedAt).toLocaleString() : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {coverage.length === 0 && (
+                  <tr>
+                    <td style={cellStyle} colSpan={7}>
+                      No embedding providers registered yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
     </section>
   );

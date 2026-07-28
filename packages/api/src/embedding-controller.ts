@@ -28,6 +28,30 @@ export class EmbeddingController {
     };
   }
 
+  /** Per-provider embed coverage for one business's knowledge base —
+   * combines IndexingService's coverage counts with each provider's live
+   * enabled/healthy/key status, so the Knowledge Hub can show not just
+   * "how much is embedded" but "why" when it's incomplete (provider
+   * disabled, unhealthy, or missing a key vs. genuinely not backfilled yet). */
+  async coverageStatus(businessId: string) {
+    const [coverage, status] = await Promise.all([
+      this.indexing.coverageStatus(businessId),
+      Promise.resolve(this.embeddings.getProviderStatus()),
+    ]);
+
+    const statusByName = new Map(status.map((s) => [s.name.toLowerCase(), s]));
+
+    return coverage.map((c) => {
+      const providerStatus = statusByName.get(c.provider.toLowerCase());
+      return {
+        ...c,
+        enabled: providerStatus?.enabled ?? false,
+        healthy: providerStatus?.healthy ?? false,
+        hasUsableKey: providerStatus?.hasUsableKey ?? false,
+      };
+    });
+  }
+
   /** Every embedding provider the dashboard can offer to activate, coded or not. */
   catalog() {
     return {
