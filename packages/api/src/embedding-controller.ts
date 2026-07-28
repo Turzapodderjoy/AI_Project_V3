@@ -110,4 +110,11 @@ export class EmbeddingController {
   async backfillAllProviders(businessId?: string) {
     return this.indexing.backfillAllProviders(businessId);
   }
+
+  /** One provider, one business — the Knowledge Hub coverage table's
+   * per-row "Backfill" button, for fixing just the provider that's
+   * behind without re-checking every other one. */
+  async backfillProvider(businessId: string, provider: string) {
+    return this.indexing.backfillProvider(businessId, provider);
+  }
 }

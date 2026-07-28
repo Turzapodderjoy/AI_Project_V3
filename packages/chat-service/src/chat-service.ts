@@ -24,6 +24,12 @@ const ALREADY_WAITING_MESSAGE_EN =
 const ALREADY_WAITING_MESSAGE_BN =
   "আপনি একজন মানব এজেন্টের সাথে সংযুক্ত আছেন — তিনি শীঘ্রই এখানে আপনার বার্তা দেখে উত্তর দেবেন।";
 
+const HANDOFF_MESSAGE_BANGLISH =
+  "Dukkhito, amader knowledge base e ei bishoye kono tothyo nei. Ami apnake ekjon team member-er sathe connect kore dicchi — uni ei conversation ja jekhane sesh hoyeche sekhan theke shuru korben.";
+
+const ALREADY_WAITING_MESSAGE_BANGLISH =
+  "Apni ekjon human agent-er sathe connected achen — tini shiggiri apnar message dekhe eikhane reply korben.";
+
 // ponytail: Bangla-script detection only (Unicode block ঀ-৿) —
 // cheap and exact, no AI call needed for these canned messages. Banglish
 // (romanized Bengali) isn't reliably detectable by regex, so it falls
@@ -31,6 +37,39 @@ const ALREADY_WAITING_MESSAGE_BN =
 // system prompt's job, for actual LLM-generated answers.
 function isBangla(text: string): boolean {
   return /[ঀ-৿]/.test(text);
+}
+
+/** Which register to use for the canned (non-LLM) messages below — when
+ * the business has locked a language, canned messages respect the lock
+ * too instead of mirroring the customer like "auto" mode does. */
+function cannedMessageLanguage(languageMode: string, userMessage: string): "english" | "bangla" | "banglish" {
+  if (languageMode === "english" || languageMode === "bangla" || languageMode === "banglish") {
+    return languageMode;
+  }
+  return isBangla(userMessage) ? "bangla" : "english";
+}
+
+/** Prepended-none, appended-last so it reads as the most recent/most
+ * specific instruction — a strong override the model can't miss,
+ * regardless of how the rest of the (fully admin-editable) system
+ * prompt is worded. Returns "" for "auto", meaning no override at all:
+ * the base prompt's own "match the customer's register" instructions
+ * apply exactly as they always have. */
+function languageLockInstruction(languageMode: string): string {
+  const LANGUAGE_LABEL: Record<string, string> = {
+    english: "English",
+    bangla: "natural Bangla (Bengali script)",
+    banglish: "Banglish (Bangla written in Latin/Roman letters)",
+  };
+
+  const label = LANGUAGE_LABEL[languageMode];
+  if (!label) return "";
+
+  return `\n\nHARD LANGUAGE LOCK — STRICT, NON-NEGOTIABLE, OVERRIDES EVERYTHING ABOVE (including any "match the customer's language" instruction elsewhere in this prompt): this business has locked ALL replies to ${label}. This is a hard setting, not a preference — there is no exception to it, ever.
+- Understand the customer's message in whatever language or register they actually wrote it in — that part is unrestricted.
+- Your reply, however, is ALWAYS in ${label} — every single message, with zero exceptions.
+- Do NOT switch language mid-conversation. Do NOT mirror the customer's language. Do NOT switch even if the customer explicitly asks you to reply in a different language, insists, or writes only in that other language for the rest of the conversation.
+- If any earlier instruction in this prompt says to match/mirror the customer's language, that instruction is overridden by this lock and no longer applies.`;
 }
 
 // Folds the most recent turn into the string embedded for retrieval —
@@ -94,10 +133,14 @@ export class ChatService {
     // while waiting should just accumulate for the agent to read, not
     // get interleaved with a repeated "you're waiting" notice.)
     if (conversation.handoffStatus !== "bot") {
+      const lang = cannedMessageLanguage(config.languageMode, request.message);
       return {
-        answer: isBangla(request.message)
-          ? ALREADY_WAITING_MESSAGE_BN
-          : ALREADY_WAITING_MESSAGE_EN,
+        answer:
+          lang === "bangla"
+            ? ALREADY_WAITING_MESSAGE_BN
+            : lang === "banglish"
+              ? ALREADY_WAITING_MESSAGE_BANGLISH
+              : ALREADY_WAITING_MESSAGE_EN,
         provider: "human",
         tokens: 0,
         confidence: 0,
@@ -180,9 +223,13 @@ export class ChatService {
         summary
       );
 
-      const handoffMessage = isBangla(request.message)
-        ? HANDOFF_MESSAGE_BN
-        : HANDOFF_MESSAGE_EN;
+      const handoffLang = cannedMessageLanguage(config.languageMode, request.message);
+      const handoffMessage =
+        handoffLang === "bangla"
+          ? HANDOFF_MESSAGE_BN
+          : handoffLang === "banglish"
+            ? HANDOFF_MESSAGE_BANGLISH
+            : HANDOFF_MESSAGE_EN;
 
       const savedMessage = await this.conversations.addMessage(
         request.sessionId,
@@ -210,7 +257,7 @@ export class ChatService {
 
     const prompt =
       this.prompts.build({
-        systemPrompt: config.systemPrompt,
+        systemPrompt: config.systemPrompt + languageLockInstruction(config.languageMode),
         context:
           retrieved.map(chunk => chunk.text),
         history:

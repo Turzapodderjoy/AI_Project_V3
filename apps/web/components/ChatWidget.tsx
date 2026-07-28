@@ -27,7 +27,36 @@ function sessionKey(businessId: string): string {
   return `chatSessionId:${businessId}`;
 }
 
-function getSessionId(businessId: string): string {
+/** Real initials — "Paikari Bazar" -> "PB" (first letter of the first
+ * two words), "Acme" -> "AC" (first two letters of a single word).
+ * Falls back to "XX" for a name with no letters at all (shouldn't
+ * happen in practice, just avoids an empty prefix). */
+function initialsFromName(name: string): string {
+  const words = name.trim().split(/\s+/).filter((w) => /[a-zA-Z]/.test(w));
+
+  const initials =
+    words.length >= 2
+      ? words[0]!.charAt(0) + words[1]!.charAt(0)
+      : (words[0] ?? "").replace(/[^a-zA-Z]/g, "").slice(0, 2);
+
+  return (initials || "XX").toUpperCase();
+}
+
+function formatTimestamp(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+/** "PB-20260729-153042-a1b2" — client initials + date + time so a Chat
+ * ID actually means something at a glance instead of being a random
+ * UUID, with a short random suffix only to avoid a collision if two
+ * chats somehow start in the same second. */
+function generateSessionId(businessName: string): string {
+  const suffix = Math.random().toString(16).slice(2, 6);
+  return `${initialsFromName(businessName)}-${formatTimestamp(new Date())}-${suffix}`;
+}
+
+function getSessionId(businessId: string, businessName: string): string {
   const key = sessionKey(businessId);
   const existing = window.localStorage.getItem(key);
 
@@ -35,12 +64,23 @@ function getSessionId(businessId: string): string {
     return existing;
   }
 
-  const generated = crypto.randomUUID();
+  const generated = generateSessionId(businessName);
   window.localStorage.setItem(key, generated);
   return generated;
 }
 
-export function ChatWidget({ businessId = "default" }: { businessId?: string }) {
+export function ChatWidget({
+  businessId = "default",
+  businessName,
+}: {
+  businessId?: string;
+  /** Real client name, used for the Chat ID's initials — omit only for
+   * the mother dashboard's generic (no specific client) demo. When
+   * businessId points at a real client, generation waits for this to
+   * arrive rather than falling back, since whatever's generated first
+   * gets persisted to localStorage permanently for that business. */
+  businessName?: string;
+}) {
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -49,9 +89,14 @@ export function ChatWidget({ businessId = "default" }: { businessId?: string }) 
   const [qa, setQa] = useState<Record<string, QaState>>({});
   const seenCount = useRef(0);
 
+  const isGenericDemo = businessId === "default";
+  const effectiveName = businessName ?? (isGenericDemo ? "General Demo" : "");
+  const nameReady = isGenericDemo || !!businessName;
+
   useEffect(() => {
-    setSessionId(getSessionId(businessId));
-  }, [businessId]);
+    if (!nameReady) return;
+    setSessionId(getSessionId(businessId, effectiveName));
+  }, [businessId, nameReady, effectiveName]);
 
   // Once a human handoff happens, poll for the agent's replies — the
   // server can't push to the browser without a websocket, so this is
@@ -126,8 +171,9 @@ export function ChatWidget({ businessId = "default" }: { businessId?: string }) 
   }
 
   function newChat() {
+    if (!nameReady) return;
     window.localStorage.removeItem(sessionKey(businessId));
-    setSessionId(getSessionId(businessId));
+    setSessionId(getSessionId(businessId, effectiveName));
     setMessages([]);
     setWaitingForAgent(false);
     setQa({});

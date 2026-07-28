@@ -119,6 +119,24 @@ export class IndexingService {
   async backfillAllProviders(
     businessId?: string
   ): Promise<{ chunksChecked: number; chunksBackfilled: number; vectorsAdded: number }> {
+    return this.backfill(businessId, undefined);
+  }
+
+  /** Same as backfillAllProviders but scoped to ONE provider — backs the
+   * Knowledge Hub coverage table's per-row "Backfill" button, for
+   * fixing just the one provider that's behind instead of re-checking
+   * every provider. */
+  async backfillProvider(
+    businessId: string,
+    providerName: string
+  ): Promise<{ chunksChecked: number; chunksBackfilled: number; vectorsAdded: number }> {
+    return this.backfill(businessId, providerName);
+  }
+
+  private async backfill(
+    businessId: string | undefined,
+    onlyProvider: string | undefined
+  ): Promise<{ chunksChecked: number; chunksBackfilled: number; vectorsAdded: number }> {
     const all = await this.vectorStore.listAll();
     const scoped = businessId
       ? all.filter((r) => r.metadata?.businessId === businessId)
@@ -132,7 +150,7 @@ export class IndexingService {
       byChunk.set(key, list);
     }
 
-    const providerNames = this.embeddingManager.getProviderNames();
+    const providerNames = onlyProvider ? [onlyProvider] : this.embeddingManager.getProviderNames();
     let chunksBackfilled = 0;
 
     // JsonProvider.upsert() reads and rewrites the ENTIRE vector store file

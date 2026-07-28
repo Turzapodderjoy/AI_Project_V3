@@ -48,6 +48,8 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
   const [url, setUrl] = useState("");
   const [adding, setAdding] = useState(false);
   const [crawlMessage, setCrawlMessage] = useState("");
+  const [backfilling, setBackfilling] = useState<string | null>(null);
+  const [backfillMessage, setBackfillMessage] = useState("");
   const wasActive = useRef(false);
 
   function refreshDocuments() {
@@ -133,6 +135,37 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
       body: JSON.stringify({ documentId: doc.documentId, businessId }),
     });
     refreshDocuments();
+  }
+
+  /** Re-embeds every chunk this business has that's missing a vector
+   * from just this one provider — for fixing a provider that's behind
+   * or was down earlier, without waiting for tomorrow's cron or
+   * re-checking every other provider too. */
+  async function backfillProvider(provider: string) {
+    if (!businessId) return;
+    setBackfilling(provider);
+    setBackfillMessage("");
+
+    try {
+      const res = await fetch("/api/admin/embedding-providers/backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId, provider }),
+      });
+      const result = await res.json();
+
+      setBackfillMessage(
+        res.ok
+          ? `${provider}: backfilled ${result.chunksBackfilled} chunk(s), ${result.vectorsAdded} vector(s) added.`
+          : `Error: ${result.error}`
+      );
+
+      if (res.ok) {
+        refreshDocuments();
+      }
+    } finally {
+      setBackfilling(null);
+    }
   }
 
   return (
@@ -270,6 +303,7 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
             provider; less than 100% means the daily backfill cron (or a
             provider being down/disabled) hasn&apos;t caught up yet.
           </p>
+          {backfillMessage && <p style={{ fontSize: 13, opacity: 0.8 }}>{backfillMessage}</p>}
           {!coverage && <p>Loading…</p>}
           {coverage && (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -282,6 +316,7 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
                   <th style={cellStyle}>Chunks embedded</th>
                   <th style={cellStyle}>Coverage</th>
                   <th style={cellStyle}>Last indexed</th>
+                  <th style={cellStyle}></th>
                 </tr>
               </thead>
               <tbody>
@@ -302,12 +337,22 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
                       <td style={cellStyle}>
                         {c.lastIndexedAt ? new Date(c.lastIndexedAt).toLocaleString() : "—"}
                       </td>
+                      <td style={cellStyle}>
+                        {pct < 100 && (
+                          <button
+                            onClick={() => backfillProvider(c.provider)}
+                            disabled={backfilling === c.provider}
+                          >
+                            {backfilling === c.provider ? "Backfilling…" : "Backfill"}
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
                 {coverage.length === 0 && (
                   <tr>
-                    <td style={cellStyle} colSpan={7}>
+                    <td style={cellStyle} colSpan={8}>
                       No embedding providers registered yet.
                     </td>
                   </tr>

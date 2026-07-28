@@ -50,6 +50,19 @@ export class AiConfigController {
     return this.aiConfig.append(businessId, additionalText, note);
   }
 
+  private static readonly VALID_LANGUAGE_MODES = new Set(["auto", "english", "bangla", "banglish"]);
+
+  /** Locks which language the AI always replies in for this business,
+   * regardless of what language the customer writes in — "auto" means
+   * match the customer's own register instead (the original behavior). */
+  setLanguageMode(languageMode: string, businessId: string = PLATFORM_CONFIG_ID) {
+    if (!AiConfigController.VALID_LANGUAGE_MODES.has(languageMode)) {
+      throw new Error('languageMode must be "auto", "english", "bangla", or "banglish".');
+    }
+
+    return this.aiConfig.setLanguageMode(businessId, languageMode);
+  }
+
   /** Appends a rule to the platform default AND every existing client's
    * own current prompt — for policy rules that must apply everywhere
    * immediately, not just to clients who haven't customized their prompt

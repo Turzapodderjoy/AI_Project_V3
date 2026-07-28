@@ -177,7 +177,13 @@ model AiConfigVersion {
   historyTurns Int
   temperature  Float    @default(0.1)
 
-  changeType   String   // "seed" | "update" | "append"
+  // "auto" (match whatever register the customer's latest message used —
+  // the original, still-default behavior) | "english" | "bangla" |
+  // "banglish" — when locked, the AI always replies in this language
+  // regardless of what language the customer writes in.
+  languageMode String   @default("auto")
+
+  changeType   String   // "seed" | "update" | "append" | "language"
   note         String?
 
   createdAt    DateTime @default(now())

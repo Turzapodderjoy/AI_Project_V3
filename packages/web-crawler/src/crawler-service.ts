@@ -9,6 +9,18 @@ import { estimatePageCount } from "./estimate";
 
 const MAX_PAGES = 25;
 
+// Small pages (under EmbeddingManager's own per-provider batch size)
+// embed almost instantly, so without an explicit pace here a crawl with
+// many small pages could still fire page after page back-to-back with
+// no gap at all — same "don't burst into the ceiling" reasoning as
+// EmbeddingManager's own batch pacing, just at the page level instead
+// of the chunk level.
+const DELAY_BETWEEN_PAGES_MS = 1500;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export interface CrawlTargetSummary {
   id: string;
   businessId: string;
@@ -194,7 +206,12 @@ export class CrawlerService {
 
       await this.vectorStore.deleteByDocumentIds(changedPages.map((c) => c.documentId));
 
-      for (const { page, documentId, contentHash, pageStatus } of changedPages) {
+      for (let i = 0; i < changedPages.length; i++) {
+        if (i > 0) {
+          await sleep(DELAY_BETWEEN_PAGES_MS);
+        }
+
+        const { page, documentId, contentHash, pageStatus } = changedPages[i]!;
         const result = await this.indexing.index({
           filename: page.url,
           text: page.text,

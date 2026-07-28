@@ -155,7 +155,7 @@ export default function DashboardPage() {
         <KnowledgeHubPanel />
       </div>
       <div style={{ display: tab === "chat" ? "block" : "none" }}>
-        <ChatWidget />
+        <ChatWidget businessName="Mother Dashboard" />
       </div>
       <div style={{ display: tab === "handoffs" ? "block" : "none" }}>
         <HandoffsPanel />

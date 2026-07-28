@@ -17,6 +17,8 @@ export interface AiConfig {
   handoffFloor: number;
   historyTurns: number;
   temperature: number;
+  /** "auto" | "english" | "bangla" | "banglish" — see schema comment. */
+  languageMode: string;
   changeType: string;
   note: string | null;
   createdAt: string;
@@ -29,6 +31,7 @@ type Row = {
   handoffFloor: number;
   historyTurns: number;
   temperature: number;
+  languageMode: string;
   changeType: string;
   note: string | null;
   createdAt: Date;
@@ -42,6 +45,7 @@ function toConfig(row: Row): AiConfig {
     handoffFloor: row.handoffFloor,
     historyTurns: row.historyTurns,
     temperature: row.temperature,
+    languageMode: row.languageMode,
     changeType: row.changeType,
     note: row.note,
     createdAt: row.createdAt.toISOString(),
@@ -94,7 +98,10 @@ export class AiConfigService {
     return toConfig(seeded);
   }
 
-  /** Full replace — used by the dashboard's "Update" button. */
+  /** Full replace — used by the dashboard's "Update" button. Carries the
+   * current languageMode forward unchanged (that's its own dedicated
+   * setLanguageMode() control below) — without this, every prompt edit
+   * would silently reset any language lock back to "auto". */
   async update(
     businessId: string,
     systemPrompt: string,
@@ -103,6 +110,8 @@ export class AiConfigService {
     temperature: number,
     note?: string
   ): Promise<AiConfig> {
+    const current = await this.getCurrent(businessId);
+
     const created = await prisma.aiConfigVersion.create({
       data: {
         businessId,
@@ -110,6 +119,7 @@ export class AiConfigService {
         handoffFloor,
         historyTurns,
         temperature,
+        languageMode: current.languageMode,
         changeType: "update",
         note: note?.trim() || null,
       },
@@ -136,8 +146,33 @@ export class AiConfigService {
         handoffFloor: current.handoffFloor,
         historyTurns: current.historyTurns,
         temperature: current.temperature,
+        languageMode: current.languageMode,
         changeType: "append",
         note: note?.trim() || additionalText.trim().slice(0, 120),
+      },
+    });
+
+    return toConfig(created);
+  }
+
+  /** Locks (or unlocks, via "auto") which language the AI replies in,
+   * regardless of what language the customer writes in — a separate
+   * lightweight control from the full prompt editor, so toggling it
+   * doesn't require touching the prompt text itself. Everything else
+   * (prompt, floor, turns, temperature) carries forward unchanged. */
+  async setLanguageMode(businessId: string, languageMode: string, note?: string): Promise<AiConfig> {
+    const current = await this.getCurrent(businessId);
+
+    const created = await prisma.aiConfigVersion.create({
+      data: {
+        businessId,
+        systemPrompt: current.systemPrompt,
+        handoffFloor: current.handoffFloor,
+        historyTurns: current.historyTurns,
+        temperature: current.temperature,
+        languageMode,
+        changeType: "language",
+        note: note?.trim() || `Language locked to ${languageMode}`,
       },
     });
 

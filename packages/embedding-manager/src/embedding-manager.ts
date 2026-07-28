@@ -18,6 +18,25 @@ interface RegisteredProvider {
   keyManager: KeyManager;
 }
 
+// Every embedding provider's embedMany() sends the WHOLE input array as
+// ONE API call (see packages/{gemini,mistral,embedding-manager/jina}) —
+// there's no batching or pacing inside any of them. A single large
+// document (a crawled category page can be 100+ chunks) or a bulk
+// backfill run therefore fires one huge request per provider per
+// call, which is exactly the kind of burst that trips a provider's
+// per-minute request/token ceiling (the same class of problem already
+// hit and fixed for Groq's chat rate limit in the training pipeline).
+// Splitting into smaller sub-batches with a short pace between them
+// keeps steady-state usage under the ceiling instead of bursting into
+// it — applies uniformly to uploads, crawls, and backfill, since they
+// all funnel through embedManyWithProvider() below.
+const EMBED_BATCH_SIZE = 20;
+const EMBED_BATCH_DELAY_MS = 1000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Same rotation/failover/health-tracking shape as AIManager (packages/
  * ai-manager) — reuses its KeyManager/HealthTracker/UsageTracker/
@@ -166,7 +185,10 @@ export class EmbeddingManager {
   }
 
   /** Batch version of embedWithProvider — one specific named provider,
-   * bypassing rotation. */
+   * bypassing rotation. Splits into EMBED_BATCH_SIZE-sized sub-batches
+   * paced EMBED_BATCH_DELAY_MS apart (see the comment above those
+   * constants) so a large `texts` array can't fire one oversized burst
+   * request at this provider. */
   async embedManyWithProvider(providerName: string, texts: string[]): Promise<EmbeddingResult[]> {
     const entry = this.providers.get(providerName.toLowerCase());
 
@@ -174,21 +196,33 @@ export class EmbeddingManager {
       throw new Error(`Embedding provider ${providerName} is not registered.`);
     }
 
-    const failures: Error[] = [];
-    const result = await this.attemptProvider(
-      entry,
-      async (provider, key) =>
-        provider.embedMany
-          ? await provider.embedMany(texts, key)
-          : await Promise.all(texts.map((t) => provider.embed(t, key))),
-      failures
-    );
+    const results: EmbeddingResult[] = [];
 
-    if (result === undefined) {
-      throw new AllProvidersFailedError(failures);
+    for (let i = 0; i < texts.length; i += EMBED_BATCH_SIZE) {
+      if (i > 0) {
+        await sleep(EMBED_BATCH_DELAY_MS);
+      }
+
+      const batch = texts.slice(i, i + EMBED_BATCH_SIZE);
+      const failures: Error[] = [];
+
+      const result = await this.attemptProvider(
+        entry,
+        async (provider, key) =>
+          provider.embedMany
+            ? await provider.embedMany(batch, key)
+            : await Promise.all(batch.map((t) => provider.embed(t, key))),
+        failures
+      );
+
+      if (result === undefined) {
+        throw new AllProvidersFailedError(failures);
+      }
+
+      results.push(...result);
     }
 
-    return result;
+    return results;
   }
 
   /** Embeds the same batch with EVERY enabled, healthy, keyed provider —

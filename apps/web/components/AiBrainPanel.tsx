@@ -11,10 +11,18 @@ interface AiConfig {
   handoffFloor: number;
   historyTurns: number;
   temperature: number;
+  languageMode: string;
   changeType: string;
   note: string | null;
   createdAt: string;
 }
+
+const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
+  { value: "auto", label: "Auto — match whatever language the customer uses" },
+  { value: "english", label: "English only" },
+  { value: "bangla", label: "Bangla only (Bengali script)" },
+  { value: "banglish", label: "Banglish only (Bangla in Latin letters)" },
+];
 
 interface AiBrainPanelProps {
   /** Omit for the mother dashboard's platform-wide default. A client
@@ -44,6 +52,10 @@ export function AiBrainPanel({ businessId }: AiBrainPanelProps) {
   const [addNote, setAddNote] = useState("");
   const [adding, setAdding] = useState(false);
 
+  const [languageDraft, setLanguageDraft] = useState("auto");
+  const [savingLanguage, setSavingLanguage] = useState(false);
+  const [languageMessage, setLanguageMessage] = useState("");
+
   const qs = businessId ? `?businessId=${encodeURIComponent(businessId)}` : "";
 
   function refresh() {
@@ -55,6 +67,7 @@ export function AiBrainPanel({ businessId }: AiBrainPanelProps) {
         setFloorDraft(data.handoffFloor);
         setTurnsDraft(data.historyTurns);
         setTemperatureDraft(data.temperature);
+        setLanguageDraft(data.languageMode);
       });
 
     fetch(`/api/admin/ai-config/history${qs}`)
@@ -63,6 +76,32 @@ export function AiBrainPanel({ businessId }: AiBrainPanelProps) {
   }
 
   useEffect(refresh, [businessId]);
+
+  async function saveLanguage() {
+    setSavingLanguage(true);
+    setLanguageMessage("");
+
+    try {
+      const res = await fetch("/api/admin/ai-config/language", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ languageMode: languageDraft, businessId }),
+      });
+      const result = await res.json();
+
+      setLanguageMessage(
+        res.ok
+          ? "Saved — takes effect on the very next chat message."
+          : `Error: ${result.error}`
+      );
+
+      if (res.ok) {
+        refresh();
+      }
+    } finally {
+      setSavingLanguage(false);
+    }
+  }
 
   async function saveUpdate() {
     setSaving(true);
@@ -144,6 +183,39 @@ export function AiBrainPanel({ businessId }: AiBrainPanelProps) {
 
       {current && (
         <>
+          <div style={{ border: "1px solid #30363d", borderRadius: 8, padding: 16, marginBottom: 20 }}>
+            <h3 style={{ marginTop: 0 }}>Reply language</h3>
+            <p style={{ opacity: 0.6, fontSize: 13 }}>
+              Lock which language the AI always replies in, no matter what
+              language the customer writes in — it still reads and
+              understands any language, only the reply is locked. Choose
+              &quot;Auto&quot; to go back to matching the customer&apos;s
+              own language/register instead (the default).
+            </p>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <select
+                value={languageDraft}
+                onChange={(e) => setLanguageDraft(e.target.value)}
+                style={{ padding: 8 }}
+              >
+                {LANGUAGE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <button onClick={saveLanguage} disabled={savingLanguage || languageDraft === current.languageMode}>
+                {savingLanguage ? "Saving…" : "Save"}
+              </button>
+              {current.languageMode !== "auto" && (
+                <span style={{ fontSize: 12, opacity: 0.6 }}>
+                  Currently locked to: {LANGUAGE_OPTIONS.find((o) => o.value === current.languageMode)?.label}
+                </span>
+              )}
+            </div>
+            {languageMessage && <p style={{ fontSize: 13, opacity: 0.8, marginTop: 8 }}>{languageMessage}</p>}
+          </div>
+
           <h3>Current prompt</h3>
           <textarea
             value={promptDraft}
@@ -256,6 +328,7 @@ export function AiBrainPanel({ businessId }: AiBrainPanelProps) {
               <th style={cellStyle}>Floor</th>
               <th style={cellStyle}>Turns</th>
               <th style={cellStyle}>Temp</th>
+              <th style={cellStyle}>Language</th>
               <th style={cellStyle}></th>
             </tr>
           </thead>
@@ -269,6 +342,7 @@ export function AiBrainPanel({ businessId }: AiBrainPanelProps) {
                   <td style={cellStyle}>{v.handoffFloor}</td>
                   <td style={cellStyle}>{v.historyTurns}</td>
                   <td style={cellStyle}>{v.temperature}</td>
+                  <td style={cellStyle}>{v.languageMode}</td>
                   <td style={cellStyle}>
                     <button onClick={() => setExpandedId(expandedId === v.id ? null : v.id)}>
                       {expandedId === v.id ? "Hide" : "View prompt"}
@@ -277,7 +351,7 @@ export function AiBrainPanel({ businessId }: AiBrainPanelProps) {
                 </tr>
                 {expandedId === v.id && (
                   <tr>
-                    <td style={cellStyle} colSpan={7}>
+                    <td style={cellStyle} colSpan={8}>
                       <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0 }}>
                         {v.systemPrompt}
                       </pre>
@@ -288,7 +362,7 @@ export function AiBrainPanel({ businessId }: AiBrainPanelProps) {
             ))}
             {history.length === 0 && (
               <tr>
-                <td style={cellStyle} colSpan={7}>
+                <td style={cellStyle} colSpan={8}>
                   No history yet.
                 </td>
               </tr>

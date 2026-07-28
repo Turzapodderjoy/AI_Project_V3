@@ -89,7 +89,7 @@ export default function ClientDashboardPage() {
         <KnowledgeHubPanel businessId={businessId} />
       </div>
       <div style={{ display: tab === "chat" ? "block" : "none" }}>
-        <ChatWidget businessId={businessId} />
+        <ChatWidget businessId={businessId} businessName={client?.name} />
       </div>
       <div style={{ display: tab === "handoffs" ? "block" : "none" }}>
         <HandoffsPanel businessId={businessId} />
