@@ -12,6 +12,19 @@ import type {
   ChatResponse,
 } from "./types";
 
+// Emitted by the LLM itself (see the system prompt's ANSWERING FROM THE
+// KNOWLEDGE BASE section) when it can't help from the knowledge base OR
+// the customer explicitly asks for a human — the ONLY reliable, language-
+// agnostic way to know that, since retrieval confidence measures how well
+// the knowledge base matches the QUESTION, not whether the AI actually
+// managed to answer it or whether the customer just typed "talk to a
+// human". Before this, handoff was decided entirely from confidence
+// BEFORE the LLM ever ran, so the AI could say "let me connect you with a
+// team member" in its own reply and nothing would actually happen — no
+// handoff record, invisible to the Handoffs queue, customer stuck talking
+// to the bot forever.
+const HANDOFF_MARKER = "[[NEEDS_HUMAN]]";
+
 const HANDOFF_MESSAGE_EN =
   "I don't have any information about that in our knowledge base. Let me connect you with a team member who can help — they'll pick up right where this conversation left off.";
 
@@ -272,28 +285,49 @@ export class ChatService {
         config.temperature
       );
 
+    // The AI itself decided (see HANDOFF_MARKER's comment) — strip the
+    // marker before the customer ever sees it either way.
+    const wantsHandoff = aiResponse.response.includes(HANDOFF_MARKER);
+    const cleanedAnswer = aiResponse.response.replaceAll(HANDOFF_MARKER, "").trim();
+
+    if (wantsHandoff) {
+      const fullHistory = [
+        ...priorHistory,
+        { id: "pending", role: "user" as const, content: request.message, createdAt: new Date() },
+      ];
+      const summary = await this.buildHandoffSummary(fullHistory);
+      await this.conversations.requestHandoff(
+        request.sessionId,
+        "ai_requested",
+        summary
+      );
+    }
+
     const savedMessage = await this.conversations.addMessage(
       request.sessionId,
       "assistant",
-      aiResponse.response
+      cleanedAnswer
     );
 
     this.usageLog.record({
       chatId: request.sessionId,
-      provider: aiResponse.provider,
+      provider: wantsHandoff ? "handoff" : aiResponse.provider,
       tokens: aiResponse.tokens,
       confidence,
       createdAt: new Date().toISOString(),
     });
 
     // Same reasoning as the lookup above — only cache answers to
-    // standalone first questions, not context-dependent follow-ups.
-    if (priorHistory.length === 0) {
+    // standalone first questions, not context-dependent follow-ups. Also
+    // never cache a handoff — it's a decline, not a reusable answer, and
+    // caching it would keep returning "let me connect you" for a
+    // question a fixed knowledge base gap might answer correctly later.
+    if (priorHistory.length === 0 && !wantsHandoff) {
       this.responseCache.store(
         queryEmbedding,
         businessId,
         request.message,
-        aiResponse.response,
+        cleanedAnswer,
         aiResponse.provider,
         confidence,
         queryEmbeddingProvider
@@ -301,10 +335,11 @@ export class ChatService {
     }
 
     return {
-      answer: aiResponse.response,
+      answer: cleanedAnswer,
       provider: aiResponse.provider,
       tokens: aiResponse.tokens,
       confidence,
+      handoff: wantsHandoff || undefined,
       messageId: savedMessage.id,
     };
   }
