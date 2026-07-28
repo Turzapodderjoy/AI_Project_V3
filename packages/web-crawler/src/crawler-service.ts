@@ -153,6 +153,15 @@ export class CrawlerService {
       }
 
       let chunkCount = 0;
+      const crawledAt = new Date().toISOString();
+
+      // Sorted into two batches instead of acting page-by-page — JsonProvider
+      // rewrites its ENTIRE file on every write call, so doing this per page
+      // meant up to MAX_PAGES full-file rewrites per crawl run. Unchanged
+      // pages get one batched metadata patch; changed/new pages get one
+      // batched delete before being re-indexed.
+      const unchangedDocumentIds: string[] = [];
+      const changedPages: Array<{ page: (typeof pages)[number]; documentId: string; contentHash: string; pageStatus: string }> = [];
 
       for (const page of pages) {
         // Stable per-page documentId so a re-crawl replaces that page's
@@ -163,21 +172,29 @@ export class CrawlerService {
 
         if (previousHash === contentHash) {
           chunkCount += existingChunkCountByDoc.get(documentId) ?? 0;
-
-          // Content identical to last crawl — no need to re-embed it,
-          // just refresh the status/timestamp shown in the Knowledge Hub.
-          await this.vectorStore.updateMetadata(documentId, {
-            pageStatus: "unchanged",
-            lastCrawledAt: new Date().toISOString(),
-          });
-
+          unchangedDocumentIds.push(documentId);
           continue;
         }
 
-        const pageStatus = previousHash ? "updated" : "new";
+        changedPages.push({
+          page,
+          documentId,
+          contentHash,
+          pageStatus: previousHash ? "updated" : "new",
+        });
+      }
 
-        await this.vectorStore.deleteByDocumentId(documentId);
+      // Content identical to last crawl — no need to re-embed it, just
+      // refresh the status/timestamp shown in the Knowledge Hub, for all
+      // unchanged pages in one write.
+      await this.vectorStore.updateMetadataMany(unchangedDocumentIds, {
+        pageStatus: "unchanged",
+        lastCrawledAt: crawledAt,
+      });
 
+      await this.vectorStore.deleteByDocumentIds(changedPages.map((c) => c.documentId));
+
+      for (const { page, documentId, contentHash, pageStatus } of changedPages) {
         const result = await this.indexing.index({
           filename: page.url,
           text: page.text,
@@ -188,7 +205,7 @@ export class CrawlerService {
             url: page.url,
             contentHash,
             pageStatus,
-            lastCrawledAt: new Date().toISOString(),
+            lastCrawledAt: crawledAt,
           },
         });
 

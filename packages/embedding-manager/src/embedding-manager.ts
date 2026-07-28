@@ -201,18 +201,26 @@ export class EmbeddingManager {
   async embedManyAllProviders(
     texts: string[]
   ): Promise<Array<{ provider: string; results: EmbeddingResult[] }>> {
+    const names = this.getProviderNames();
+
+    // Every provider embeds the same batch independently — there's no
+    // reason to pay the sum of every provider's latency in sequence when
+    // the max is all that actually matters. A provider that fails just
+    // gets skipped (below), same as before.
+    const settled = await Promise.allSettled(
+      names.map((name) => this.embedManyWithProvider(name, texts))
+    );
+
     const out: Array<{ provider: string; results: EmbeddingResult[] }> = [];
 
-    for (const name of this.getProviderNames()) {
-      try {
-        const results = await this.embedManyWithProvider(name, texts);
-        out.push({ provider: name, results });
-      } catch {
-        // This provider couldn't embed this batch right now (down,
-        // rate-limited, out of quota) — the other providers still get
-        // their shot, and a scheduled backfill pass retries the gap.
+    settled.forEach((outcome, i) => {
+      if (outcome.status === "fulfilled") {
+        out.push({ provider: names[i]!, results: outcome.value });
       }
-    }
+      // Rejected = this provider couldn't embed this batch right now
+      // (down, rate-limited, out of quota) — the other providers' results
+      // still count, and a scheduled backfill pass retries the gap.
+    });
 
     return out;
   }

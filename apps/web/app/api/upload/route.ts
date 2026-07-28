@@ -10,7 +10,14 @@ export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const file = form.get("file");
-    const businessId = typeof form.get("businessId") === "string" ? (form.get("businessId") as string) : "default";
+    const businessId = form.get("businessId");
+
+    if (typeof businessId !== "string" || !businessId.trim()) {
+      return NextResponse.json(
+        { success: false, error: "businessId is required" },
+        { status: 400 }
+      );
+    }
 
     if (!(file instanceof File)) {
       return NextResponse.json(

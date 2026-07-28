@@ -151,8 +151,24 @@ export class AdminController {
   }
 
   /** Removes one indexed document (all its chunks) — does not touch the
-   * crawl target that produced it, if any; that keeps re-crawling. */
-  async deleteDocument(documentId: string): Promise<{ deleted: string }> {
+   * crawl target that produced it, if any; that keeps re-crawling. When
+   * called with a businessId (every real caller — the per-client and
+   * mother dashboards both know which business they're scoped to), this
+   * verifies the document actually belongs to that business first, so a
+   * guessed/leaked documentId from another client can't be used to
+   * delete their content. */
+  async deleteDocument(documentId: string, businessId?: string): Promise<{ deleted: string }> {
+    if (businessId) {
+      const records = await this.vectorStore.listAll();
+      const owned = records.some(
+        (r) => r.documentId === documentId && r.metadata?.businessId === businessId
+      );
+
+      if (!owned) {
+        throw new Error("Document not found for this business.");
+      }
+    }
+
     await this.vectorStore.deleteByDocumentId(documentId);
     return { deleted: documentId };
   }

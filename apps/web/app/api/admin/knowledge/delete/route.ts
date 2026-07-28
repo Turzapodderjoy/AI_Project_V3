@@ -11,7 +11,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const app = await getApp();
-    const result = await app.container.router.admin.deleteDocument(body.documentId);
+    const result = await app.container.router.admin.deleteDocument(
+      body.documentId,
+      typeof body.businessId === "string" ? body.businessId : undefined
+    );
     return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json(

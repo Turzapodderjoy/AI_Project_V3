@@ -13,13 +13,28 @@ export interface MessageFeedbackRecord {
  * conversation quality. */
 export class MessageFeedbackService {
   /** Upsert — only the current verdict for a message matters, re-clicking
-   * pass/fail replaces the previous one rather than piling up history. */
+   * pass/fail replaces the previous one rather than piling up history.
+   * Verifies the message actually belongs to a conversation for the
+   * given businessId first — the caller (a public-CORS route) supplies
+   * both messageId and businessId itself, so without this check a
+   * guessed/observed messageId could have QA feedback attached to it
+   * under an arbitrary businessId, poisoning that client's training
+   * signal with feedback on an answer that was never actually theirs. */
   async record(
     messageId: string,
     businessId: string,
     verdict: "pass" | "fail",
     note?: string
   ): Promise<MessageFeedbackRecord> {
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { conversation: { select: { businessId: true } } },
+    });
+
+    if (!message || message.conversation.businessId !== businessId) {
+      throw new Error("Message not found for this business.");
+    }
+
     const row = await prisma.messageFeedback.upsert({
       where: { messageId },
       create: { messageId, businessId, verdict, note: note?.trim() || null },

@@ -113,7 +113,7 @@ export function KnowledgeHubPanel({ businessId }: { businessId?: string }) {
     await fetch("/api/admin/knowledge/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ documentId: doc.documentId }),
+      body: JSON.stringify({ documentId: doc.documentId, businessId }),
     });
     refreshDocuments();
   }

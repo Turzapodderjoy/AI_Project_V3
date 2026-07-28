@@ -46,7 +46,19 @@ export interface VectorStore {
 
   deleteByDocumentId(documentId: string): Promise<void>;
 
+  /** Same as deleteByDocumentId but for many documents in one call — for
+   * a caller (e.g. the crawler) that would otherwise delete documents one
+   * at a time in a loop. JsonProvider's storage is a single flat file
+   * that's read/rewritten in full on every write call, so batching matters
+   * here specifically: N single deletes cost N full-file rewrites, one
+   * batched call costs one. */
+  deleteByDocumentIds(documentIds: string[]): Promise<void>;
+
   /** Patches metadata on every chunk of a document without touching its
    * embedding — for status updates that shouldn't cost a re-embed. */
   updateMetadata(documentId: string, patch: Record<string, unknown>): Promise<void>;
+
+  /** Same patch applied to many documents in one call — same batching
+   * rationale as deleteByDocumentIds. */
+  updateMetadataMany(documentIds: string[], patch: Record<string, unknown>): Promise<void>;
 }

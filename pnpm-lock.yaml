@@ -115,9 +115,6 @@ importers:
 
   packages/ai-manager:
     dependencies:
-      '@ai-chat-platform/provider-orchestrator':
-        specifier: workspace:*
-        version: link:../provider-orchestrator
       '@ai-chat-platform/types':
         specifier: workspace:*
         version: link:../types
@@ -281,18 +278,6 @@ importers:
         specifier: ^6.15.0
         version: 6.15.0(prisma@6.15.0(typescript@5.9.2))(typescript@5.9.2)
 
-  packages/chat-engine:
-    dependencies:
-      '@ai-chat-platform/ai-manager':
-        specifier: workspace:*
-        version: link:../ai-manager
-      '@ai-chat-platform/knowledge-base':
-        specifier: workspace:*
-        version: link:../knowledge-base
-      '@ai-chat-platform/prompt-engine':
-        specifier: workspace:*
-        version: link:../prompt-engine
-
   packages/chat-service:
     dependencies:
       '@ai-chat-platform/ai-config':
@@ -326,12 +311,6 @@ importers:
       '@ai-chat-platform/types':
         specifier: workspace:*
         version: link:../types
-
-  packages/dashboard:
-    dependencies:
-      '@ai-chat-platform/database':
-        specifier: workspace:*
-        version: link:../database
 
   packages/database:
     dependencies:
@@ -423,9 +402,6 @@ importers:
 
   packages/groq:
     dependencies:
-      '@ai-chat-platform/provider-orchestrator':
-        specifier: workspace:*
-        version: link:../provider-orchestrator
       '@ai-chat-platform/types':
         specifier: workspace:^
         version: link:../types
@@ -447,14 +423,9 @@ importers:
 
   packages/ingestion:
     dependencies:
-      '@ai-chat-platform/chunker':
-        specifier: workspace:*
-        version: link:../chunker
       '@ai-chat-platform/document-loader':
         specifier: workspace:*
         version: link:../document-loader
-
-  packages/knowledge-base: {}
 
   packages/mistral:
     dependencies:
@@ -471,11 +442,7 @@ importers:
         specifier: workspace:^
         version: link:../types
 
-  packages/prompt-engine:
-    dependencies:
-      '@ai-chat-platform/knowledge-base':
-        specifier: workspace:*
-        version: link:../knowledge-base
+  packages/prompt-engine: {}
 
   packages/provider-catalog:
     dependencies:
@@ -504,12 +471,6 @@ importers:
         specifier: workspace:*
         version: link:../database
 
-  packages/provider-orchestrator:
-    dependencies:
-      '@ai-chat-platform/types':
-        specifier: workspace:*
-        version: link:../types
-
   packages/rag:
     dependencies:
       '@ai-chat-platform/chat-service':
@@ -529,9 +490,6 @@ importers:
       '@ai-chat-platform/embedding-manager':
         specifier: workspace:*
         version: link:../embedding-manager
-      '@ai-chat-platform/vector-repository':
-        specifier: workspace:*
-        version: link:../vector-repository
       '@ai-chat-platform/vector-store':
         specifier: workspace:*
         version: link:../vector-store
@@ -541,18 +499,6 @@ importers:
       '@ai-chat-platform/database':
         specifier: workspace:*
         version: link:../database
-
-  packages/training:
-    dependencies:
-      '@ai-chat-platform/indexing':
-        specifier: workspace:*
-        version: link:../indexing
-      '@ai-chat-platform/ingestion':
-        specifier: workspace:*
-        version: link:../ingestion
-      '@ai-chat-platform/upload':
-        specifier: workspace:*
-        version: link:../upload
 
   packages/training-pipeline:
     dependencies:
@@ -621,8 +567,6 @@ importers:
       '@ai-chat-platform/ingestion':
         specifier: workspace:*
         version: link:../ingestion
-
-  packages/vector-repository: {}
 
   packages/vector-store: {}
 

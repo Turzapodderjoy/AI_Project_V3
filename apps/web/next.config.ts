@@ -3,7 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   transpilePackages: [
     "@ai-chat-platform/ai-manager",
-    "@ai-chat-platform/chat-engine",
     "@ai-chat-platform/chunker",
     "@ai-chat-platform/config",
     "@ai-chat-platform/database",
@@ -15,10 +14,8 @@ const nextConfig: NextConfig = {
     "@ai-chat-platform/cerebras",
     "@ai-chat-platform/mistral",
     "@ai-chat-platform/ingestion",
-    "@ai-chat-platform/knowledge-base",
     "@ai-chat-platform/types",
     "@ai-chat-platform/vector-store",
-    "@ai-chat-platform/vector-repository",
     "@ai-chat-platform/indexing",
     "@ai-chat-platform/bootstrap",
     "@ai-chat-platform/api",
@@ -34,6 +31,9 @@ const nextConfig: NextConfig = {
     "@ai-chat-platform/web-crawler",
     "@ai-chat-platform/ai-config",
     "@ai-chat-platform/provider-keys",
+    "@ai-chat-platform/training-pipeline",
+    "@ai-chat-platform/channel-catalog",
+    "@ai-chat-platform/channel-connections",
   ],
   serverExternalPackages: ["@lancedb/lancedb"],
 };

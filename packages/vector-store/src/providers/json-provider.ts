@@ -97,8 +97,15 @@ export class JsonProvider implements VectorStore {
   }
 
   async deleteByDocumentId(documentId: string): Promise<void> {
+    return this.deleteByDocumentIds([documentId]);
+  }
+
+  async deleteByDocumentIds(documentIds: string[]): Promise<void> {
+    if (documentIds.length === 0) return;
+
     const current = await this.read();
-    const remaining = current.filter((r) => r.documentId !== documentId);
+    const toDelete = new Set(documentIds);
+    const remaining = current.filter((r) => !toDelete.has(r.documentId));
 
     await fs.writeFile(
       this.filePath,
@@ -111,10 +118,17 @@ export class JsonProvider implements VectorStore {
     documentId: string,
     patch: Record<string, unknown>
   ): Promise<void> {
+    return this.updateMetadataMany([documentId], patch);
+  }
+
+  async updateMetadataMany(documentIds: string[], patch: Record<string, unknown>): Promise<void> {
+    if (documentIds.length === 0) return;
+
     const current = await this.read();
+    const targets = new Set(documentIds);
 
     const updated = current.map((r) =>
-      r.documentId === documentId
+      targets.has(r.documentId)
         ? { ...r, metadata: { ...r.metadata, ...patch } }
         : r
     );

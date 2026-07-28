@@ -3,9 +3,15 @@
 import { useState } from "react";
 
 export function UploadWidget({
-  businessId = "default",
+  businessId,
   onUploaded,
 }: {
+  /** No fallback on purpose — a document has to belong to a real client.
+   * The old "default" fallback here meant uploading from the mother
+   * dashboard's combined (no single client selected) Knowledge Hub view
+   * silently created documents under a businessId that matched no real
+   * Business row and could never be found again from any client's own
+   * dashboard. */
   businessId?: string;
   onUploaded?: () => void;
 }) {
@@ -13,6 +19,8 @@ export function UploadWidget({
   const [loading, setLoading] = useState(false);
 
   async function upload(file: File) {
+    if (!businessId) return;
+
     setLoading(true);
 
     const form = new FormData();
@@ -31,6 +39,16 @@ export function UploadWidget({
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!businessId) {
+    return (
+      <p style={{ opacity: 0.6, fontSize: 13 }}>
+        Select a specific client's dashboard to upload documents — this
+        combined view spans every client, so there&apos;s no single
+        business to attach an upload to.
+      </p>
+    );
   }
 
   return (

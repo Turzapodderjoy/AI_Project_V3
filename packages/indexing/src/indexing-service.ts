@@ -134,7 +134,14 @@ export class IndexingService {
 
     const providerNames = this.embeddingManager.getProviderNames();
     let chunksBackfilled = 0;
-    let vectorsAdded = 0;
+
+    // JsonProvider.upsert() reads and rewrites the ENTIRE vector store file
+    // on every call — calling it once per (chunk × missing provider), as
+    // this used to, meant N×M full-file read/parse/stringify/write cycles
+    // against a file that only grows. Accumulating every new record and
+    // upserting once at the end turns that into a single rewrite for the
+    // whole run, regardless of how many chunks/providers needed backfilling.
+    const newRecords: VectorRecord[] = [];
 
     for (const records of byChunk.values()) {
       // Records without a tag at all predate this feature entirely and
@@ -155,7 +162,7 @@ export class IndexingService {
         try {
           const result = await this.embeddingManager.embedWithProvider(providerName, sample.text);
 
-          await this.vectorStore.upsert([{
+          newRecords.push({
             id: crypto.randomUUID(),
             documentId: sample.documentId,
             chunkId: sample.chunkId,
@@ -166,9 +173,8 @@ export class IndexingService {
               embeddingProvider: providerName,
               indexedAt: new Date().toISOString(),
             },
-          }]);
+          });
 
-          vectorsAdded += 1;
           addedForThisChunk = true;
         } catch {
           // That provider is still unavailable — next day's cron run tries again.
@@ -180,6 +186,10 @@ export class IndexingService {
       }
     }
 
-    return { chunksChecked: byChunk.size, chunksBackfilled, vectorsAdded };
+    if (newRecords.length > 0) {
+      await this.vectorStore.upsert(newRecords);
+    }
+
+    return { chunksChecked: byChunk.size, chunksBackfilled, vectorsAdded: newRecords.length };
   }
 }
