@@ -13,6 +13,12 @@ import { IndexingService } from "@ai-chat-platform/indexing";
 import { UploadService } from "@ai-chat-platform/upload";
 import { TenantService } from "@ai-chat-platform/tenant";
 import { CrawlerService } from "@ai-chat-platform/web-crawler";
+import {
+  ChatAnalysisService,
+  ReasoningClient,
+  ChatAnalysisPipeline,
+  PromptSuggestionService,
+} from "@ai-chat-platform/training-pipeline";
 import { ChatController } from "@ai-chat-platform/api";
 import { UploadController } from "@ai-chat-platform/api";
 import { HealthController } from "@ai-chat-platform/api";
@@ -21,6 +27,7 @@ import { HandoffController } from "@ai-chat-platform/api";
 import { CrawlerController } from "@ai-chat-platform/api";
 import { AiConfigController } from "@ai-chat-platform/api";
 import { EmbeddingController } from "@ai-chat-platform/api";
+import { TrainingController } from "@ai-chat-platform/api";
 import { ApiRouter } from "@ai-chat-platform/api";
 
 export class Container {
@@ -77,8 +84,36 @@ export class Container {
         indexingService
       );
 
+    const tenants =
+      new TenantService();
+
     const crawlerService =
       new CrawlerService(indexingService);
+
+    // Deliberately its own dedicated key (GROQ_TRAINING_API_KEY), not
+    // the shared AIManager/Groq key powering live chat — this pipeline's
+    // batch analysis calls must never compete with real customer
+    // traffic for Groq's rate limit.
+    const reasoningClient =
+      new ReasoningClient(process.env.GROQ_TRAINING_API_KEY ?? "");
+
+    const chatAnalysisService =
+      new ChatAnalysisService();
+
+    const chatAnalysisPipeline =
+      new ChatAnalysisPipeline(
+        chatAnalysisService,
+        reasoningClient,
+        aiConfig
+      );
+
+    const promptSuggestionService =
+      new PromptSuggestionService(
+        chatAnalysisService,
+        reasoningClient,
+        aiConfig,
+        tenants
+      );
 
     this.router =
       new ApiRouter(
@@ -91,7 +126,7 @@ export class Container {
           embeddings,
           chatUsageLog,
           responseCache,
-          new TenantService(),
+          tenants,
           conversations,
           crawlerService,
           providerKeys
@@ -99,7 +134,13 @@ export class Container {
         new HandoffController(conversations),
         new CrawlerController(crawlerService),
         new AiConfigController(aiConfig),
-        new EmbeddingController(embeddings, providerKeys)
+        new EmbeddingController(embeddings, providerKeys, indexingService),
+        new TrainingController(
+          chatAnalysisService,
+          aiConfig,
+          chatAnalysisPipeline,
+          promptSuggestionService
+        )
       );
   }
 

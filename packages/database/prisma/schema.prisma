@@ -84,10 +84,23 @@ model Conversation {
   handoffSummary     String?
   handoffRequestedAt DateTime?
 
+  // Training pipeline: has this conversation been through the daily
+  // chat-analysis cron yet? Cron only ever pulls where this is false,
+  // so re-running it never reprocesses the same conversation twice.
+  processedForTraining Boolean @default(false)
+  // Not currently collected anywhere in the app (no rating UI exists) —
+  // column added for forward-compatibility so the training pipeline's
+  // schema doesn't need another migration the day a rating widget
+  // does get built.
+  userFeedbackRating   Int?
+
   messages           Message[]
+  chatAnalysis       ChatAnalysis?
 
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+
+  @@index([businessId, processedForTraining])
 }
 
 model Message {
@@ -168,4 +181,81 @@ model ProviderApiKey {
   updatedAt  DateTime @updatedAt
 
   @@unique([kind, providerId])
+}
+
+// One row per conversation the daily training-pipeline cron has looked
+// at — the permanent, human-readable audit trail ("full track record
+// with findings") regardless of whether anything was extracted. Kept
+// even for dropped conversations so the record of *why* something was
+// dropped survives, not just the kept ones.
+model ChatAnalysis {
+  id             String   @id @default(cuid())
+
+  conversationId String   @unique
+  businessId     String
+
+  // "kept" | "dropped_spam" | "dropped_irrelevant" | "dropped_harmful"
+  verdict        String
+  // Plain-language explanation from the reasoning LLM — what the
+  // Training & Insights dashboard panel actually displays.
+  findings       String
+
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  examples       TrainingExample[]
+
+  createdAt      DateTime @default(now())
+
+  @@index([businessId, createdAt])
+}
+
+// One row per extracted instruction/response training pair — only
+// exists for "kept" ChatAnalysis rows. `output` carries the full
+// <think>...</think>reasoning + answer, ready to append to the JSONL
+// export as-is.
+model TrainingExample {
+  id             String   @id @default(cuid())
+
+  chatAnalysisId String
+  businessId     String
+
+  instruction    String
+  input          String
+  output         String
+
+  chatAnalysis   ChatAnalysis @relation(fields: [chatAnalysisId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime @default(now())
+
+  @@index([businessId, createdAt])
+}
+
+// A proposed edit to a client's AI Brain prompt, generated from patterns
+// across that business's recent ChatAnalysis findings — never applied
+// automatically. Accepting one calls the existing AiConfigService (same
+// update()/append() a human editing the AI Brain panel would trigger),
+// which creates a real new AiConfigVersion row; declining just marks
+// this row, the live prompt is untouched either way.
+model PromptSuggestion {
+  id                    String    @id @default(cuid())
+
+  businessId            String
+
+  // "update" | "append" — mirrors AiConfigVersion.changeType
+  kind                  String
+  // Full replacement text, only set when kind = "update"
+  proposedSystemPrompt  String?
+  // Text to append, only set when kind = "append"
+  proposedAppendText    String?
+
+  // Plain-language justification shown next to the Accept/Decline
+  // buttons — "why this change is being suggested."
+  reasoning             String
+
+  // "pending" | "accepted" | "declined"
+  status                String    @default("pending")
+
+  createdAt             DateTime  @default(now())
+  decidedAt             DateTime?
+
+  @@index([businessId, status])
 }

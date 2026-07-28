@@ -4,6 +4,7 @@ import {
   PLANNED_EMBEDDING_PROVIDERS,
 } from "@ai-chat-platform/embedding-catalog";
 import { ProviderKeyStore } from "@ai-chat-platform/provider-keys";
+import { IndexingService } from "@ai-chat-platform/indexing";
 
 /**
  * Same shape as AdminController's provider-management methods (providers/
@@ -16,7 +17,8 @@ import { ProviderKeyStore } from "@ai-chat-platform/provider-keys";
 export class EmbeddingController {
   constructor(
     private readonly embeddings: EmbeddingManager,
-    private readonly providerKeys: ProviderKeyStore
+    private readonly providerKeys: ProviderKeyStore,
+    private readonly indexing: IndexingService
   ) {}
 
   providers() {
@@ -75,5 +77,13 @@ export class EmbeddingController {
 
   usage() {
     return this.embeddings.getUsage();
+  }
+
+  /** Backfills missing embedding-provider coverage across every
+   * client's knowledge base (or one, if businessId is given) — run
+   * daily via cron so every provider stays fully mapped even as new
+   * providers get added or a temporarily-down one recovers. */
+  async backfillAllProviders(businessId?: string) {
+    return this.indexing.backfillAllProviders(businessId);
   }
 }

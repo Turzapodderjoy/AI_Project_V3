@@ -145,6 +145,9 @@ importers:
       '@ai-chat-platform/embedding-manager':
         specifier: workspace:*
         version: link:../embedding-manager
+      '@ai-chat-platform/indexing':
+        specifier: workspace:*
+        version: link:../indexing
       '@ai-chat-platform/provider-catalog':
         specifier: workspace:*
         version: link:../provider-catalog
@@ -157,6 +160,9 @@ importers:
       '@ai-chat-platform/tenant':
         specifier: workspace:*
         version: link:../tenant
+      '@ai-chat-platform/training-pipeline':
+        specifier: workspace:*
+        version: link:../training-pipeline
       '@ai-chat-platform/upload':
         specifier: workspace:*
         version: link:../upload
@@ -233,6 +239,9 @@ importers:
       '@ai-chat-platform/tenant':
         specifier: workspace:*
         version: link:../tenant
+      '@ai-chat-platform/training-pipeline':
+        specifier: workspace:*
+        version: link:../training-pipeline
       '@ai-chat-platform/upload':
         specifier: workspace:*
         version: link:../upload
@@ -521,6 +530,21 @@ importers:
       '@ai-chat-platform/upload':
         specifier: workspace:*
         version: link:../upload
+
+  packages/training-pipeline:
+    dependencies:
+      '@ai-chat-platform/ai-config':
+        specifier: workspace:*
+        version: link:../ai-config
+      '@ai-chat-platform/ai-manager':
+        specifier: workspace:*
+        version: link:../ai-manager
+      '@ai-chat-platform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@ai-chat-platform/tenant':
+        specifier: workspace:*
+        version: link:../tenant
 
   packages/types: {}
 

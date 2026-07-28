@@ -5,6 +5,7 @@ import {
   JsonProvider,
   VectorStoreManager,
 } from "@ai-chat-platform/vector-store";
+import type { VectorRecord } from "@ai-chat-platform/vector-store";
 
 import type {
   IndexRequest,
@@ -42,54 +43,59 @@ export class IndexingService {
       request.documentId ??
       crypto.randomUUID();
 
-    // One batched call for every chunk instead of one call per chunk —
-    // the difference between 1 request and N requests to the embedding
-    // API per document, which is what was triggering Jina's 429s.
-    const embeddings =
+    // Embeds every chunk with EVERY registered embedding provider, not
+    // just one — every client's knowledge base needs to be fully mapped
+    // under every provider, so retrieval never depends on which
+    // provider happened to embed the query. A provider that's down for
+    // this call just gets fewer vectors this round; the daily backfill
+    // cron (see EmbeddingManager.embedManyAllProviders callers) catches
+    // up anything that was missed.
+    const perProvider =
       chunks.length > 0
-        ? await this.embeddingManager.embedMany(
+        ? await this.embeddingManager.embedManyAllProviders(
             chunks.map((chunk) => chunk.content)
           )
         : [];
 
-    const vectors = chunks.map((chunk, i) => ({
-      id: crypto.randomUUID(),
+    const vectors: VectorRecord[] = perProvider.flatMap(({ provider, results }) =>
+      chunks.map((chunk, i) => ({
+        id: crypto.randomUUID(),
 
-      documentId,
+        documentId,
 
-      chunkId: chunk.id,
+        chunkId: chunk.id,
 
-      text: chunk.content,
+        text: chunk.content,
 
-      embedding:
-        embeddings[i]!.embedding,
+        embedding:
+          results[i]!.embedding,
 
-      metadata: {
-        filename: request.filename,
-        chunkIndex: chunk.index,
-        startOffset:
-          chunk.startOffset,
-        endOffset:
-          chunk.endOffset,
-        tokenEstimate:
-          chunk.tokenEstimate,
-        // Tags which embedding provider produced this vector — required
-        // so retrieval only ever compares vectors from the same space
-        // (see json-provider.ts's search()). Different chunks of the
-        // same document can end up with different providers if a
-        // rotation happened mid-upload; that's fine, each is tagged
-        // with what actually embedded it.
-        embeddingProvider:
-          embeddings[i]!.provider,
-        // Universal "when was this chunk (re)indexed" timestamp — covers
-        // both uploads (which had no timestamp at all before this) and
-        // crawled pages (which already had their own lastCrawledAt, kept
-        // for backward compatibility since existing rows only have that).
-        indexedAt:
-          new Date().toISOString(),
-        ...(request.metadata ?? {})
-      }
-    }));
+        metadata: {
+          filename: request.filename,
+          chunkIndex: chunk.index,
+          startOffset:
+            chunk.startOffset,
+          endOffset:
+            chunk.endOffset,
+          tokenEstimate:
+            chunk.tokenEstimate,
+          // Tags which embedding provider produced this vector — required
+          // so retrieval only ever compares vectors from the same space
+          // (see json-provider.ts's search()). Every provider gets its
+          // own vector for the same chunk now, so this is what tells
+          // them apart.
+          embeddingProvider:
+            provider,
+          // Universal "when was this chunk (re)indexed" timestamp — covers
+          // both uploads (which had no timestamp at all before this) and
+          // crawled pages (which already had their own lastCrawledAt, kept
+          // for backward compatibility since existing rows only have that).
+          indexedAt:
+            new Date().toISOString(),
+          ...(request.metadata ?? {})
+        }
+      }))
+    );
 
     await this.vectorStore.upsert(
       vectors
@@ -101,5 +107,79 @@ export class IndexingService {
       vectors: vectors.length,
       createdAt: new Date()
     };
+  }
+
+  /** Backfills missing embedding-provider coverage for content that
+   * predates a provider being added (or was indexed while that provider
+   * was temporarily down) — for each distinct chunk, embeds it with
+   * whichever registered providers don't already have a vector for it.
+   * Run daily via cron so every client's knowledge base stays fully
+   * mapped under every embedding provider even as new providers get
+   * added or old ones recover from an outage. */
+  async backfillAllProviders(
+    businessId?: string
+  ): Promise<{ chunksChecked: number; chunksBackfilled: number; vectorsAdded: number }> {
+    const all = await this.vectorStore.listAll();
+    const scoped = businessId
+      ? all.filter((r) => r.metadata?.businessId === businessId)
+      : all;
+
+    const byChunk = new Map<string, VectorRecord[]>();
+    for (const record of scoped) {
+      const key = `${record.documentId}::${record.chunkId}`;
+      const list = byChunk.get(key) ?? [];
+      list.push(record);
+      byChunk.set(key, list);
+    }
+
+    const providerNames = this.embeddingManager.getProviderNames();
+    let chunksBackfilled = 0;
+    let vectorsAdded = 0;
+
+    for (const records of byChunk.values()) {
+      // Records without a tag at all predate this feature entirely and
+      // were all embedded by Jina — see json-provider.ts's search().
+      const covered = new Set(
+        records.map((r) => (r.metadata?.embeddingProvider as string | undefined) ?? "jina")
+      );
+      const missing = providerNames.filter((name) => !covered.has(name));
+
+      if (missing.length === 0) {
+        continue;
+      }
+
+      const sample = records[0]!;
+      let addedForThisChunk = false;
+
+      for (const providerName of missing) {
+        try {
+          const result = await this.embeddingManager.embedWithProvider(providerName, sample.text);
+
+          await this.vectorStore.upsert([{
+            id: crypto.randomUUID(),
+            documentId: sample.documentId,
+            chunkId: sample.chunkId,
+            text: sample.text,
+            embedding: result.embedding,
+            metadata: {
+              ...sample.metadata,
+              embeddingProvider: providerName,
+              indexedAt: new Date().toISOString(),
+            },
+          }]);
+
+          vectorsAdded += 1;
+          addedForThisChunk = true;
+        } catch {
+          // That provider is still unavailable — next day's cron run tries again.
+        }
+      }
+
+      if (addedForThisChunk) {
+        chunksBackfilled += 1;
+      }
+    }
+
+    return { chunksChecked: byChunk.size, chunksBackfilled, vectorsAdded };
   }
 }

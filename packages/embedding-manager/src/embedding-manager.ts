@@ -165,6 +165,58 @@ export class EmbeddingManager {
     return result;
   }
 
+  /** Batch version of embedWithProvider — one specific named provider,
+   * bypassing rotation. */
+  async embedManyWithProvider(providerName: string, texts: string[]): Promise<EmbeddingResult[]> {
+    const entry = this.providers.get(providerName.toLowerCase());
+
+    if (!entry) {
+      throw new Error(`Embedding provider ${providerName} is not registered.`);
+    }
+
+    const failures: Error[] = [];
+    const result = await this.attemptProvider(
+      entry,
+      async (provider, key) =>
+        provider.embedMany
+          ? await provider.embedMany(texts, key)
+          : await Promise.all(texts.map((t) => provider.embed(t, key))),
+      failures
+    );
+
+    if (result === undefined) {
+      throw new AllProvidersFailedError(failures);
+    }
+
+    return result;
+  }
+
+  /** Embeds the same batch with EVERY enabled, healthy, keyed provider —
+   * not just one. Used for indexing (uploads/crawls/backfill) so a
+   * client's knowledge base is fully mapped under every embedding
+   * provider, not just whichever one rotation happened to pick. A
+   * provider that fails is skipped, not fatal — partial coverage this
+   * run still leaves retrieval working via whichever providers did
+   * succeed, and a later backfill pass can fill in the rest. */
+  async embedManyAllProviders(
+    texts: string[]
+  ): Promise<Array<{ provider: string; results: EmbeddingResult[] }>> {
+    const out: Array<{ provider: string; results: EmbeddingResult[] }> = [];
+
+    for (const name of this.getProviderNames()) {
+      try {
+        const results = await this.embedManyWithProvider(name, texts);
+        out.push({ provider: name, results });
+      } catch {
+        // This provider couldn't embed this batch right now (down,
+        // rate-limited, out of quota) — the other providers still get
+        // their shot, and a scheduled backfill pass retries the gap.
+      }
+    }
+
+    return out;
+  }
+
   /** Same structure as AIManager.generate(): try each enabled, healthy
    * provider in order, rotating through its keys, until one succeeds or
    * every provider/key combination has failed. */

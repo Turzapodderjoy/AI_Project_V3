@@ -7,3 +7,4 @@ export * from "./handoff-controller";
 export * from "./crawler-controller";
 export * from "./ai-config-controller";
 export * from "./embedding-controller";
+export * from "./training-controller";
