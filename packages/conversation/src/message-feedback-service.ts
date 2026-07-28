@@ -7,6 +7,21 @@ export interface MessageFeedbackRecord {
   note: string | null;
 }
 
+export interface MessageFeedbackWithStatus extends MessageFeedbackRecord {
+  createdAt: string;
+  messageContent: string;
+  /** Has the daily training pipeline analyzed this message's conversation
+   * yet? (Conversation.processedForTraining.) */
+  processed: boolean;
+  /** The resulting ChatAnalysis for this conversation, once processed —
+   * its findings text already narrates how this QA annotation was used
+   * (verified live: e.g. "retained because it includes a Human QA FAIL
+   * annotation..."), so this is the honest answer to "what happened as a
+   * result of this QA" rather than a guessed link to any one suggestion. */
+  analysisVerdict: string | null;
+  analysisFindings: string | null;
+}
+
 /** Per-message QA verdicts recorded from the Chat Demo tab — the
  * training pipeline's strongest signal, since it's an explicit human
  * judgment of one specific answer rather than an LLM's own guess at
@@ -42,6 +57,36 @@ export class MessageFeedbackService {
     });
 
     return { messageId: row.messageId, businessId: row.businessId, verdict: row.verdict as "pass" | "fail", note: row.note };
+  }
+
+  /** Every QA'd message plus whether/how the training pipeline has acted
+   * on it — backs the QA Review dashboard panel. */
+  async listWithStatus(businessId?: string): Promise<MessageFeedbackWithStatus[]> {
+    const rows = await prisma.messageFeedback.findMany({
+      where: businessId ? { businessId } : undefined,
+      orderBy: { createdAt: "desc" },
+      include: {
+        message: {
+          include: {
+            conversation: {
+              include: { chatAnalysis: true },
+            },
+          },
+        },
+      },
+    });
+
+    return rows.map((row) => ({
+      messageId: row.messageId,
+      businessId: row.businessId,
+      verdict: row.verdict as "pass" | "fail",
+      note: row.note,
+      createdAt: row.createdAt.toISOString(),
+      messageContent: row.message.content,
+      processed: row.message.conversation.processedForTraining,
+      analysisVerdict: row.message.conversation.chatAnalysis?.verdict ?? null,
+      analysisFindings: row.message.conversation.chatAnalysis?.findings ?? null,
+    }));
   }
 
   /** Batch lookup, keyed by messageId — used by the training pipeline to

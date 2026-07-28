@@ -7,16 +7,18 @@ import { KnowledgeHubPanel } from "../../components/KnowledgeHubPanel";
 import { HandoffsPanel } from "../../components/HandoffsPanel";
 import { AiBrainPanel } from "../../components/AiBrainPanel";
 import { TrainingPanel } from "../../components/TrainingPanel";
+import { QaReviewPanel } from "../../components/QaReviewPanel";
 import { PlatformChannelAppsPanel } from "../../components/PlatformChannelAppsPanel";
 import { cellStyle, formatBytes } from "../../components/dashboard-styles";
 
-type Tab = "ai" | "embedding" | "brain" | "training" | "channels" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
+type Tab = "ai" | "embedding" | "brain" | "training" | "qa" | "channels" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "ai", label: "AI Providers" },
   { id: "embedding", label: "Embedding Providers" },
   { id: "brain", label: "AI Brain" },
   { id: "training", label: "Training & Insights" },
+  { id: "qa", label: "QA Review" },
   { id: "channels", label: "Integrations" },
   { id: "usage", label: "Usage" },
   { id: "clients", label: "Clients" },
@@ -134,6 +136,9 @@ export default function DashboardPage() {
       </div>
       <div style={{ display: tab === "training" ? "block" : "none" }}>
         <TrainingPanel />
+      </div>
+      <div style={{ display: tab === "qa" ? "block" : "none" }}>
+        <QaReviewPanel />
       </div>
       <div style={{ display: tab === "channels" ? "block" : "none" }}>
         <PlatformChannelAppsPanel />

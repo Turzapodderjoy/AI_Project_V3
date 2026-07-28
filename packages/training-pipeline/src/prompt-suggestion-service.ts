@@ -6,9 +6,7 @@ import type { TenantService } from "@ai-chat-platform/tenant";
 
 interface RawSuggestionResponse {
   shouldChange?: boolean;
-  kind?: string;
   reasoning?: string;
-  proposedSystemPrompt?: string;
   proposedAppendText?: string;
 }
 
@@ -84,21 +82,20 @@ export class PromptSuggestionService {
       return false;
     }
 
-    const kind = parsed.kind === "append" ? "append" : "update";
-
-    if (kind === "update" && !parsed.proposedSystemPrompt) {
-      return false;
-    }
-
-    if (kind === "append" && !parsed.proposedAppendText) {
+    // Every suggestion this pipeline generates is additive-only, always
+    // — see PROMPT_SUGGESTION_SYSTEM_PROMPT. "kind" still exists on the
+    // PromptSuggestion table/AiConfigController.acceptSuggestion's dual
+    // branch for any older "update"-kind row already sitting pending
+    // from before this change; nothing new ever creates one.
+    if (!parsed.proposedAppendText) {
       return false;
     }
 
     await this.analysis.createSuggestion({
       businessId,
-      kind,
-      proposedSystemPrompt: kind === "update" ? parsed.proposedSystemPrompt : null,
-      proposedAppendText: kind === "append" ? parsed.proposedAppendText : null,
+      kind: "append",
+      proposedSystemPrompt: null,
+      proposedAppendText: parsed.proposedAppendText,
       reasoning: parsed.reasoning ?? "(no reasoning text returned)",
     });
 

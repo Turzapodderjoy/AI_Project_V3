@@ -33,6 +33,17 @@ function isBangla(text: string): boolean {
   return /[ঀ-৿]/.test(text);
 }
 
+// Folds the most recent turn into the string embedded for retrieval —
+// a bare "price?" carries almost no signal alone, but "is X authentic?
+// ... price?" retrieves the right chunks. Deliberately small (last 2
+// messages, not the whole history) so retrieval stays focused on what's
+// actually being asked about right now rather than diluted by older
+// unrelated turns.
+function buildRetrievalQuery(history: ConversationMessage[], currentMessage: string): string {
+  const recent = history.slice(-2).map((m) => m.content).join(" ");
+  return recent ? `${recent} ${currentMessage}`.trim() : currentMessage;
+}
+
 export class ChatService {
   constructor(
     private readonly conversations: ConversationService,
@@ -94,8 +105,19 @@ export class ChatService {
       };
     }
 
+    // A bare follow-up ("price?" right after "is the X authentic?") has
+    // almost no retrievable signal on its own — embedding just that turn
+    // finds weak/wrong chunks, confidence falls under the handoff floor,
+    // and the conversation gets handed off before the history-aware
+    // prompt below ever gets a chance to resolve "price of what". Folding
+    // the most recent turn into the RETRIEVAL query (not the final answer
+    // prompt, which already gets full history correctly) fixes this —
+    // it's the same "follow-ups need context" reasoning the cache skip
+    // just below already applies, just applied one step earlier.
+    const retrievalQuery = buildRetrievalQuery(priorHistory, request.message);
+
     const queryEmbeddingResult =
-      await this.embeddings.embed(request.message);
+      await this.embeddings.embed(retrievalQuery);
     const queryEmbedding = queryEmbeddingResult.embedding;
     const queryEmbeddingProvider = queryEmbeddingResult.provider;
 
@@ -136,7 +158,7 @@ export class ChatService {
 
     const retrieved =
       await this.retriever.retrieve(
-        request.message,
+        retrievalQuery,
         { embedding: queryEmbedding, embeddingProvider: queryEmbeddingProvider, businessId }
       );
 

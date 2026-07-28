@@ -16,4 +16,10 @@ export class FeedbackController {
 
     return this.feedback.record(messageId, businessId, verdict, note);
   }
+
+  /** Every QA'd message plus training-pipeline status — backs the QA
+   * Review dashboard panel (mother-dashboard, spans every client). */
+  list(businessId?: string) {
+    return this.feedback.listWithStatus(businessId);
+  }
 }
