@@ -35,6 +35,14 @@ export class EmbeddingManager {
   private readonly usageTracker = new UsageTracker();
   private readonly keyCooldownMs: number;
   private readonly maxRetriesPerKey: number;
+  /** Advances by one on every call so consecutive embed()/embedMany()
+   * calls each start with a DIFFERENT provider instead of always trying
+   * the same first-registered one and only moving on when it fails.
+   * Spreads load proactively across all healthy providers round-robin
+   * style; a call still fails over further down this same rotated order
+   * if its starting provider errors, so wrapping back around to a
+   * provider that succeeded on a previous call is expected, not a bug. */
+  private nextStartIndex = 0;
 
   constructor(options: { keyCooldownMs?: number; maxRetriesPerKey?: number } = {}) {
     this.keyCooldownMs = options.keyCooldownMs ?? 30_000;
@@ -135,7 +143,18 @@ export class EmbeddingManager {
 
     const failures: Error[] = [];
 
-    for (const entry of this.providers.values()) {
+    // Captured and advanced synchronously, before any `await` below, so
+    // concurrent calls each grab a distinct starting index in the order
+    // they were invoked rather than racing on a shared counter.
+    const allEntries = Array.from(this.providers.values());
+    const startIndex = this.nextStartIndex % allEntries.length;
+    this.nextStartIndex = (this.nextStartIndex + 1) % allEntries.length;
+    const orderedEntries = [
+      ...allEntries.slice(startIndex),
+      ...allEntries.slice(0, startIndex),
+    ];
+
+    for (const entry of orderedEntries) {
       const provider = entry.provider;
       const providerName = provider.name;
 
