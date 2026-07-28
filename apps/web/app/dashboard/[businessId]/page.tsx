@@ -8,8 +8,9 @@ import { KnowledgeHubPanel } from "../../../components/KnowledgeHubPanel";
 import { HandoffsPanel } from "../../../components/HandoffsPanel";
 import { StoragePanel } from "../../../components/StoragePanel";
 import { AiBrainPanel } from "../../../components/AiBrainPanel";
+import { ChannelsPanel } from "../../../components/ChannelsPanel";
 
-type Tab = "knowledge" | "chat" | "handoffs" | "storage" | "brain";
+type Tab = "knowledge" | "chat" | "handoffs" | "storage" | "brain" | "channels";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "knowledge", label: "Knowledge Hub" },
@@ -17,6 +18,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "handoffs", label: "Handoffs" },
   { id: "storage", label: "Storage" },
   { id: "brain", label: "AI Brain" },
+  { id: "channels", label: "Integrations" },
 ];
 
 interface Client {
@@ -37,6 +39,16 @@ export default function ClientDashboardPage() {
 
   const [tab, setTab] = useState<Tab>("knowledge");
   const [client, setClient] = useState<Client | null>(null);
+
+  // Always renders "knowledge" on the server/first paint to avoid a
+  // hydration mismatch, then jumps to the OAuth callback's ?tab= param
+  // (see api/oauth/[channel]/callback) once mounted.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab") as Tab | null;
+    if (requested && TABS.some((t) => t.id === requested)) {
+      setTab(requested);
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/admin/clients")
@@ -88,6 +100,9 @@ export default function ClientDashboardPage() {
       </div>
       <div style={{ display: tab === "brain" ? "block" : "none" }}>
         <AiBrainPanel businessId={businessId} />
+      </div>
+      <div style={{ display: tab === "channels" ? "block" : "none" }}>
+        <ChannelsPanel businessId={businessId} />
       </div>
     </main>
   );

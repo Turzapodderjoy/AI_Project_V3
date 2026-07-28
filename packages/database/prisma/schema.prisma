@@ -259,3 +259,44 @@ model PromptSuggestion {
 
   @@index([businessId, status])
 }
+
+// Per-client channel connections (website/messenger/instagram/whatsapp) —
+// one row per (business, channel). Absence of a row means "not
+// connected"; the dashboard shows that as a plain state rather than
+// needing a separate status column for it. Disconnecting deletes the
+// row (not a soft-delete) — status is kept anyway so a future "error"
+// state (e.g. Meta revoked the token) doesn't need a schema change.
+model ChannelConnection {
+  id            String   @id @default(cuid())
+  businessId    String
+  channel       String
+  status        String   @default("connected")
+
+  // Page ID / IG Business Account ID / WhatsApp phone_number_id — how an
+  // inbound webhook payload gets matched back to a business.
+  externalId    String
+  externalLabel String
+  accessToken   String
+  config        Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([businessId, channel])
+  @@index([channel, externalId])
+}
+
+// One row per channel, platform-wide (not per client) — the Meta
+// Developer App credentials required before any client can OAuth-connect
+// Messenger/Instagram. WhatsApp's manual-entry connect flow doesn't need
+// appId/appSecret, only webhookVerifyToken, but shares this table since
+// it's still one place to configure every channel's platform-level setup.
+model ChannelAppCredential {
+  channel            String   @id
+  appId              String   @default("")
+  appSecret          String   @default("")
+  webhookVerifyToken String   @default("")
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}

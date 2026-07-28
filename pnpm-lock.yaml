@@ -130,6 +130,12 @@ importers:
       '@ai-chat-platform/ai-manager':
         specifier: workspace:*
         version: link:../ai-manager
+      '@ai-chat-platform/channel-catalog':
+        specifier: workspace:*
+        version: link:../channel-catalog
+      '@ai-chat-platform/channel-connections':
+        specifier: workspace:*
+        version: link:../channel-connections
       '@ai-chat-platform/chat-service':
         specifier: workspace:*
         version: link:../chat-service
@@ -200,6 +206,12 @@ importers:
       '@ai-chat-platform/api':
         specifier: workspace:*
         version: link:../api
+      '@ai-chat-platform/channel-catalog':
+        specifier: workspace:*
+        version: link:../channel-catalog
+      '@ai-chat-platform/channel-connections':
+        specifier: workspace:*
+        version: link:../channel-connections
       '@ai-chat-platform/chat-service':
         specifier: workspace:*
         version: link:../chat-service
@@ -257,6 +269,17 @@ importers:
       '@ai-chat-platform/types':
         specifier: workspace:^
         version: link:../types
+
+  packages/channel-catalog: {}
+
+  packages/channel-connections:
+    dependencies:
+      '@ai-chat-platform/database':
+        specifier: workspace:*
+        version: link:../database
+      '@prisma/client':
+        specifier: ^6.15.0
+        version: 6.15.0(prisma@6.15.0(typescript@5.9.2))(typescript@5.9.2)
 
   packages/chat-engine:
     dependencies:

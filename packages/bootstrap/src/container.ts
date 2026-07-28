@@ -19,6 +19,7 @@ import {
   ChatAnalysisPipeline,
   PromptSuggestionService,
 } from "@ai-chat-platform/training-pipeline";
+import { ChannelConnectionService, ChannelAppCredentialService } from "@ai-chat-platform/channel-connections";
 import { ChatController } from "@ai-chat-platform/api";
 import { UploadController } from "@ai-chat-platform/api";
 import { HealthController } from "@ai-chat-platform/api";
@@ -28,6 +29,7 @@ import { CrawlerController } from "@ai-chat-platform/api";
 import { AiConfigController } from "@ai-chat-platform/api";
 import { EmbeddingController } from "@ai-chat-platform/api";
 import { TrainingController } from "@ai-chat-platform/api";
+import { ChannelController } from "@ai-chat-platform/api";
 import { ApiRouter } from "@ai-chat-platform/api";
 
 export class Container {
@@ -115,6 +117,12 @@ export class Container {
         tenants
       );
 
+    const channelConnections =
+      new ChannelConnectionService();
+
+    const channelAppCredentials =
+      new ChannelAppCredentialService();
+
     this.router =
       new ApiRouter(
         new ChatController(rag),
@@ -140,6 +148,11 @@ export class Container {
           aiConfig,
           chatAnalysisPipeline,
           promptSuggestionService
+        ),
+        new ChannelController(
+          channelConnections,
+          channelAppCredentials,
+          rag
         )
       );
   }
