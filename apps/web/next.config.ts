@@ -4,7 +4,6 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     "@ai-chat-platform/ai-manager",
     "@ai-chat-platform/chunker",
-    "@ai-chat-platform/config",
     "@ai-chat-platform/database",
     "@ai-chat-platform/document-loader",
     "@ai-chat-platform/embedding-manager",
@@ -35,7 +34,6 @@ const nextConfig: NextConfig = {
     "@ai-chat-platform/channel-catalog",
     "@ai-chat-platform/channel-connections",
   ],
-  serverExternalPackages: ["@lancedb/lancedb"],
 };
 
 export default nextConfig;
