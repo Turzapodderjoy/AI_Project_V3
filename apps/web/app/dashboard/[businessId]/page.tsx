@@ -10,9 +10,10 @@ import { StoragePanel } from "../../../components/StoragePanel";
 import { AiBrainPanel } from "../../../components/AiBrainPanel";
 import { ChannelsPanel } from "../../../components/ChannelsPanel";
 import { ClientOverviewPanel } from "../../../components/ClientOverviewPanel";
+import { TrainingArenaPanel } from "../../../components/TrainingArenaPanel";
 import { DashboardShell, type NavGroup } from "../../../components/DashboardShell";
 
-type Tab = "overview" | "knowledge" | "chat" | "handoffs" | "storage" | "brain" | "channels";
+type Tab = "overview" | "knowledge" | "chat" | "handoffs" | "storage" | "brain" | "training" | "channels";
 
 const NAV_GROUPS: NavGroup<Tab>[] = [
   {
@@ -23,6 +24,7 @@ const NAV_GROUPS: NavGroup<Tab>[] = [
       { id: "handoffs", label: "Handoffs" },
       { id: "storage", label: "Storage" },
       { id: "brain", label: "AI Brain" },
+      { id: "training", label: "Training Arena" },
       { id: "channels", label: "Integrations" },
     ],
   },
@@ -99,6 +101,9 @@ export default function ClientDashboardPage() {
       </div>
       <div style={{ display: tab === "brain" ? "block" : "none" }}>
         <AiBrainPanel businessId={businessId} />
+      </div>
+      <div style={{ display: tab === "training" ? "block" : "none" }}>
+        <TrainingArenaPanel businessId={businessId} />
       </div>
       <div style={{ display: tab === "channels" ? "block" : "none" }}>
         <ChannelsPanel businessId={businessId} />

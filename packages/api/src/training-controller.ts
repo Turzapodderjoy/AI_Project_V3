@@ -104,6 +104,30 @@ export class TrainingController {
     return { accepted: id };
   }
 
+  /** Training Arena's "End session & review" button — analyzes one
+   * specific conversation on demand (not the batch/unprocessed-queue
+   * path) and, if the reasoning LLM found real signal, immediately
+   * generates a proposed AI Brain change from it, skipping the daily
+   * batch's "wait for 5 findings" threshold since a single deliberately-
+   * provoked session is itself the whole point. The returned suggestion
+   * (if any) is a normal pending PromptSuggestion — Save/Discard reuse
+   * the exact same acceptSuggestion()/declineSuggestion() above. */
+  async reviewTrainingSession(sessionId: string): Promise<{
+    verdict: string;
+    findings: string;
+    suggestion: { id: string; proposedAppendText: string; reasoning: string } | null;
+  }> {
+    const { businessId, verdict, findings } = await this.pipeline.analyzeConversationById(sessionId);
+
+    if (verdict !== "kept") {
+      return { verdict, findings, suggestion: null };
+    }
+
+    const suggestion = await this.suggestions.suggestFromFindings(businessId, [findings]);
+
+    return { verdict, findings, suggestion };
+  }
+
   async declineSuggestion(id: string): Promise<{ declined: string }> {
     const suggestion = await this.analysis.getSuggestion(id);
 

@@ -15,4 +15,5 @@ export interface ConversationRecord {
   handoffReason: string | null;
   handoffSummary: string | null;
   handoffRequestedAt: Date | null;
+  isTraining: boolean;
 }

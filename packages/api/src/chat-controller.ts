@@ -8,12 +8,14 @@ export class ChatController {
   async post(
     sessionId: string,
     message: string,
-    businessId?: string
+    businessId?: string,
+    isTraining?: boolean
   ) {
     return this.rag.ask({
       sessionId,
       message,
       businessId,
+      isTraining,
     });
   }
 }

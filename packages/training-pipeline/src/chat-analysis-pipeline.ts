@@ -1,6 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 
+import { prisma } from "@ai-chat-platform/database";
+
 import { ChatAnalysisService } from "./chat-analysis-service";
 import { ReasoningClient } from "./reasoning-client";
 import { CHAT_ANALYSIS_SYSTEM_PROMPT, buildChatAnalysisUserPrompt } from "./system-prompt";
@@ -81,6 +83,35 @@ export class ChatAnalysisPipeline {
     }
 
     return { processed: conversations.length, kept, dropped, failed };
+  }
+
+  /** Analyzes ONE specific conversation on demand — used by the Training
+   * Arena's "End session & review" button, bypassing the batch/
+   * unprocessed-queue machinery `run()` uses. Reuses the exact same
+   * extraction logic (analyzeOne) so a Training Arena session and a real
+   * customer conversation get identically-shaped findings either way. */
+  async analyzeConversationById(conversationId: string): Promise<{
+    businessId: string;
+    verdict: string;
+    findings: string;
+  }> {
+    const conversation = await prisma.conversation.findUniqueOrThrow({
+      where: { id: conversationId },
+      include: { messages: { orderBy: { createdAt: "asc" } } },
+    });
+
+    await this.analyzeOne({
+      id: conversation.id,
+      businessId: conversation.businessId,
+      messages: conversation.messages.map((m) => ({ id: m.id, role: m.role, content: m.content })),
+    });
+
+    // ChatAnalysis.conversationId is @unique, so this is exactly the row
+    // analyzeOne() just wrote — precise, no risk of a race with another
+    // conversation's analysis landing between the write and this read.
+    const record = await prisma.chatAnalysis.findUniqueOrThrow({ where: { conversationId } });
+
+    return { businessId: conversation.businessId, verdict: record.verdict, findings: record.findings };
   }
 
   private async analyzeOne(conversation: {

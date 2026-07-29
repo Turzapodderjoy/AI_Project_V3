@@ -2,6 +2,7 @@ export interface AskRequest {
   sessionId: string;
   message: string;
   businessId?: string;
+  isTraining?: boolean;
 }
 
 export interface AskResponse {

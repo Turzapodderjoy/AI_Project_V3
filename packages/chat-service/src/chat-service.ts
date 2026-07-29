@@ -135,7 +135,8 @@ export class ChatService {
       await this.conversations.getOrCreate(
         request.sessionId,
         businessId,
-        "anonymous"
+        request.isTraining ? "trainer" : "anonymous",
+        request.isTraining ?? false
       );
 
     // Fetched before this turn's message is recorded, so it's "everything
@@ -156,8 +157,11 @@ export class ChatService {
     // Already being handled by a human — don't let the bot jump back in.
     // (Doesn't record this as a message: the customer's real messages
     // while waiting should just accumulate for the agent to read, not
-    // get interleaved with a repeated "you're waiting" notice.)
-    if (conversation.handoffStatus !== "bot") {
+    // get interleaved with a repeated "you're waiting" notice.) Skipped
+    // entirely for a Training Arena session — the whole point there is
+    // to keep talking to the AI after it hands off, to correct exactly
+    // that behavior, not to simulate the real "you're waiting" UX.
+    if (!conversation.isTraining && conversation.handoffStatus !== "bot") {
       const lang = cannedMessageLanguage(config.languageMode, request.message);
       return {
         answer:

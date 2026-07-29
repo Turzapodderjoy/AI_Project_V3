@@ -20,6 +20,7 @@ export class RagService {
         sessionId: request.sessionId,
         message: request.message,
         businessId: request.businessId,
+        isTraining: request.isTraining,
       });
 
     return {

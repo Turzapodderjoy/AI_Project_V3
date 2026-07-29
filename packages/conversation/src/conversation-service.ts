@@ -14,6 +14,7 @@ type ConversationRow = {
   handoffReason: string | null;
   handoffSummary: string | null;
   handoffRequestedAt: Date | null;
+  isTraining: boolean;
 };
 
 function toRecord(row: ConversationRow): ConversationRecord {
@@ -25,6 +26,7 @@ function toRecord(row: ConversationRow): ConversationRecord {
     handoffReason: row.handoffReason,
     handoffSummary: row.handoffSummary,
     handoffRequestedAt: row.handoffRequestedAt,
+    isTraining: row.isTraining,
   };
 }
 
@@ -33,7 +35,8 @@ export class ConversationService {
   async getOrCreate(
     sessionId: string,
     businessId: string,
-    userId: string
+    userId: string,
+    isTraining = false
   ): Promise<ConversationRecord> {
 
     const existing = await prisma.conversation.findUnique({
@@ -45,7 +48,7 @@ export class ConversationService {
     }
 
     const created = await prisma.conversation.create({
-      data: { id: sessionId, businessId, userId },
+      data: { id: sessionId, businessId, userId, isTraining },
     });
 
     return toRecord(created);
@@ -111,6 +114,10 @@ export class ConversationService {
     const rows = await prisma.conversation.findMany({
       where: {
         handoffStatus: { not: "BOT" },
+        // A Training Arena session's whole point can be deliberately
+        // provoking a handoff to correct it — that's not a real customer
+        // waiting on an agent, so it shouldn't show up in the queue.
+        isTraining: false,
         ...(businessId ? { businessId } : {}),
       },
       orderBy: { updatedAt: "desc" },

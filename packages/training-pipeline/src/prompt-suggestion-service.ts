@@ -54,46 +54,50 @@ export class PromptSuggestionService {
       return false;
     }
 
+    try {
+      const suggestion = await this.suggestFromFindings(businessId, findings, pipelineRunId);
+      return suggestion !== null;
+    } catch (error) {
+      // Reasoning LLM unavailable or returned something unparseable —
+      // try again next run, don't crash the whole batch pass over it.
+      console.error(`Prompt suggestion check failed for business ${businessId}:`, error);
+      return false;
+    }
+  }
+
+  /** Same reasoning-LLM call as checkOne(), but skips the "wait for
+   * MIN_NEW_FINDINGS" threshold — for the Training Arena's "End session &
+   * review" button, where a single deliberately-provoked session is
+   * itself the whole point, not a rolling batch of incidental findings.
+   * Returns the created suggestion (or null if the model decided no
+   * change is warranted) so the caller can show it for review/save/
+   * discard immediately instead of waiting to notice it in the pending
+   * suggestions list. */
+  async suggestFromFindings(
+    businessId: string,
+    findings: string[],
+    pipelineRunId?: string
+  ): Promise<{ id: string; proposedAppendText: string; reasoning: string } | null> {
     const current = await this.aiConfig.getCurrent(businessId);
     const userPrompt = buildPromptSuggestionUserPrompt({
       currentSystemPrompt: current.systemPrompt,
       findingsBatch: findings,
     });
 
-    let result;
-    try {
-      result = await this.reasoning.ask(PROMPT_SUGGESTION_SYSTEM_PROMPT, userPrompt);
-    } catch (error) {
-      // Reasoning LLM unavailable right now — try again next run, don't
-      // burn through every business's budget retrying immediately.
-      console.error(`Prompt suggestion check failed for business ${businessId}:`, error);
-      return false;
-    }
-
+    const result = await this.reasoning.ask(PROMPT_SUGGESTION_SYSTEM_PROMPT, userPrompt);
     const parsed = parseJsonResponse<RawSuggestionResponse>(result.content);
 
     if (!parsed) {
-      console.error(
+      throw new Error(
         `Prompt suggestion for business ${businessId}: unparseable response. Raw: ${result.content.slice(0, 300)}`
       );
-      return false;
     }
 
-    if (!parsed.shouldChange) {
-      console.log(`Prompt suggestion for business ${businessId}: no change needed — ${parsed.reasoning}`);
-      return false;
+    if (!parsed.shouldChange || !parsed.proposedAppendText) {
+      return null;
     }
 
-    // Every suggestion this pipeline generates is additive-only, always
-    // — see PROMPT_SUGGESTION_SYSTEM_PROMPT. "kind" still exists on the
-    // PromptSuggestion table/AiConfigController.acceptSuggestion's dual
-    // branch for any older "update"-kind row already sitting pending
-    // from before this change; nothing new ever creates one.
-    if (!parsed.proposedAppendText) {
-      return false;
-    }
-
-    await this.analysis.createSuggestion({
+    const created = await this.analysis.createSuggestion({
       businessId,
       kind: "append",
       proposedSystemPrompt: null,
@@ -102,7 +106,11 @@ export class PromptSuggestionService {
       pipelineRunId,
     });
 
-    return true;
+    return {
+      id: created.id,
+      proposedAppendText: parsed.proposedAppendText,
+      reasoning: parsed.reasoning ?? "(no reasoning text returned)",
+    };
   }
 }
 

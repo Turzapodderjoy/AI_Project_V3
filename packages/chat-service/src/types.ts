@@ -4,6 +4,12 @@ export interface ChatRequest {
   message: string;
 
   businessId?: string;
+
+  /** Training Arena sessions only — set once, on the first message of a
+   * new sessionId. Skips the "already connected to a human agent" block
+   * after a handoff, since the whole point is to keep talking to the AI
+   * to correct exactly that behavior. Never set by real customer chat. */
+  isTraining?: boolean;
 }
 
 export interface ChatResponse {

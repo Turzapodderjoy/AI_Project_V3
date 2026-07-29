@@ -97,6 +97,15 @@ model Conversation {
   // chat-analysis cron yet? Cron only ever pulls where this is false,
   // so re-running it never reprocesses the same conversation twice.
   processedForTraining Boolean @default(false)
+  // Training Arena sessions (dashboard tab where an admin deliberately
+  // provokes/corrects the AI, e.g. triggers a handoff then argues with
+  // it) — set once at creation, never changes. Two effects: ChatService
+  // never applies the "already connected to a human agent" block to a
+  // training conversation (the whole point is to keep talking to the AI
+  // AFTER it hands off, to correct that exact behavior), and the real
+  // Handoffs queue excludes these so a training session's deliberately-
+  // provoked handoff doesn't show up as something an agent must attend to.
+  isTraining           Boolean @default(false)
   // Not currently collected anywhere in the app (no rating UI exists) —
   // column added for forward-compatibility so the training pipeline's
   // schema doesn't need another migration the day a rating widget
