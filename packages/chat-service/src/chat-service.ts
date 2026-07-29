@@ -231,20 +231,31 @@ export class ChatService {
       );
 
     // Top retrieval score doubles as a rough "grounding confidence" for
-    // this answer — how well the knowledge base actually backs it. Used
-    // for the floor check below and shown in the dashboard; no longer
-    // the sole decider of whether the AI gets to attempt an answer.
+    // this answer — how well the knowledge base actually backs it. Shown
+    // in the dashboard; no longer gates whether the AI gets to attempt
+    // an answer (see the retrieved.length check below for why).
     const confidence = retrieved[0]?.score ?? 0;
 
-    if (confidence < config.handoffFloor) {
+    // Only skip the LLM entirely when there is LITERALLY nothing indexed
+    // for this business (a genuinely empty knowledge base) — this used to
+    // check `confidence < config.handoffFloor` instead, which also fired
+    // for perfectly normal messages with low semantic similarity to any
+    // chunk (a plain "hello" scores ~0 against a product catalog with no
+    // greeting content) and handed off BEFORE the AI ever got a chance to
+    // greet naturally, exactly as its own system prompt already tells it
+    // to. The AI's own [[NEEDS_HUMAN]] marker (below) is now the accurate
+    // decision-maker for "can't help"/"customer asked for a human" — this
+    // check's only remaining job is to avoid wasting an LLM call on a
+    // business with zero indexed content at all.
+    if (retrieved.length === 0) {
       const fullHistory = [
         ...priorHistory,
         { id: "pending", role: "user" as const, content: request.message, createdAt: new Date() },
       ];
-      const summary = await this.buildHandoffSummary(fullHistory);
+      const { summary, tokens: summaryTokens } = await this.buildHandoffSummary(fullHistory);
       await this.conversations.requestHandoff(
         request.sessionId,
-        "low_confidence",
+        "empty_knowledge_base",
         summary
       );
 
@@ -265,7 +276,7 @@ export class ChatService {
       this.usageLog.record({
         chatId: request.sessionId,
         provider: "handoff",
-        tokens: 0,
+        tokens: summaryTokens,
         confidence,
         createdAt: new Date().toISOString(),
       });
@@ -273,7 +284,7 @@ export class ChatService {
       return {
         answer: handoffMessage,
         provider: "handoff",
-        tokens: 0,
+        tokens: summaryTokens,
         confidence,
         handoff: true,
         messageId: savedMessage.id,
@@ -306,16 +317,19 @@ export class ChatService {
     const wantsHandoff = aiResponse.response.includes(HANDOFF_MARKER);
     const cleanedAnswer = aiResponse.response.replaceAll(HANDOFF_MARKER, "").trim();
 
+    let summaryTokens = 0;
+
     if (wantsHandoff) {
       const fullHistory = [
         ...priorHistory,
         { id: "pending", role: "user" as const, content: request.message, createdAt: new Date() },
       ];
-      const summary = await this.buildHandoffSummary(fullHistory);
+      const built = await this.buildHandoffSummary(fullHistory);
+      summaryTokens = built.tokens;
       await this.conversations.requestHandoff(
         request.sessionId,
         "ai_requested",
-        summary
+        built.summary
       );
     }
 
@@ -328,7 +342,11 @@ export class ChatService {
     this.usageLog.record({
       chatId: request.sessionId,
       provider: wantsHandoff ? "handoff" : aiResponse.provider,
-      tokens: aiResponse.tokens,
+      // Includes the handoff summary's own LLM call cost when applicable
+      // — previously silently dropped from the per-chat total (though it
+      // was still counted in the aggregate provider totals), which made
+      // the two token displays inconsistent for any handed-off chat.
+      tokens: aiResponse.tokens + summaryTokens,
       confidence,
       createdAt: new Date().toISOString(),
     });
@@ -362,7 +380,7 @@ export class ChatService {
 
   private async buildHandoffSummary(
     history: ConversationMessage[]
-  ): Promise<string> {
+  ): Promise<{ summary: string; tokens: number }> {
     const transcript = history
       .slice(-10)
       .map((m) => `${m.role}: ${m.content}`)
@@ -373,10 +391,13 @@ export class ChatService {
         `Summarize this customer conversation in 2-3 sentences for a support agent taking over. Focus on what the customer wants and what's unresolved. The conversation may be in Bangla, Banglish, or English — write the summary in English regardless, since it's for internal review.\n\n${transcript}`,
         { maxTokens: SUMMARY_MAX_TOKENS }
       );
-      return result.response;
+      return { summary: result.response, tokens: result.tokens };
     } catch {
       // Summary is a nice-to-have; never block the handoff on it.
-      return `Conversation could not be auto-summarized. Last message: "${history.at(-1)?.content ?? ""}"`;
+      return {
+        summary: `Conversation could not be auto-summarized. Last message: "${history.at(-1)?.content ?? ""}"`,
+        tokens: 0,
+      };
     }
   }
 }

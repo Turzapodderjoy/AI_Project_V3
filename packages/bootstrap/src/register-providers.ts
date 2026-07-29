@@ -13,7 +13,8 @@ import { PROVIDER_CATALOG } from "@ai-chat-platform/provider-catalog";
  */
 export function registerProviders(
   manager: AIManager,
-  persistedKeys: Record<string, string> = {}
+  persistedKeys: Record<string, string> = {},
+  persistedDisabled: string[] = []
 ): void {
   for (const entry of PROVIDER_CATALOG) {
     const persisted = persistedKeys[entry.id];
@@ -29,5 +30,16 @@ export function registerProviders(
         value: apiKey,
       },
     ]);
+  }
+
+  // Applied last, after every provider that's going to exist this run is
+  // registered — setProviderEnabled() throws for an unregistered name,
+  // and the on/off toggle only makes sense once there's something to
+  // toggle. Without this, a dashboard "turn off" only ever patched the
+  // in-memory Set and silently reverted to enabled on the next restart.
+  for (const id of persistedDisabled) {
+    if (manager.hasProvider(id)) {
+      manager.setProviderEnabled(id, false);
+    }
   }
 }

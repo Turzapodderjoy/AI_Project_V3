@@ -6,7 +6,8 @@ import { PROVIDER_CATALOG, PLANNED_PROVIDERS } from "@ai-chat-platform/provider-
 import { TenantService } from "@ai-chat-platform/tenant";
 import { ConversationService } from "@ai-chat-platform/conversation";
 import { CrawlerService } from "@ai-chat-platform/web-crawler";
-import { ProviderKeyStore } from "@ai-chat-platform/provider-keys";
+import { ProviderKeyStore, ProviderStateStore } from "@ai-chat-platform/provider-keys";
+import { CustomOpenAICompatibleProvider } from "@ai-chat-platform/provider-catalog";
 import { prisma } from "@ai-chat-platform/database";
 
 export interface KnowledgeDocumentSummary {
@@ -31,7 +32,8 @@ export class AdminController {
     private readonly tenants: TenantService,
     private readonly conversations: ConversationService,
     private readonly crawler: CrawlerService,
-    private readonly providerKeys: ProviderKeyStore
+    private readonly providerKeys: ProviderKeyStore,
+    private readonly providerState: ProviderStateStore
   ) {}
 
   providers() {
@@ -87,10 +89,60 @@ export class AdminController {
   /** Forces a provider on/off for experimentation — independent of its
    * actual health/key state. Disabling every provider but one forces
    * that one to handle every request; disabling one forces the rest to
-   * pick up its traffic. Takes effect on the very next chat, no restart. */
-  setProviderEnabled(id: string, enabled: boolean): { id: string; enabled: boolean } {
+   * pick up its traffic. Takes effect on the very next chat, no restart —
+   * and persists, so it stays off after a restart/redeploy/cold start
+   * too (previously reverted to enabled every time). */
+  async setProviderEnabled(id: string, enabled: boolean): Promise<{ id: string; enabled: boolean }> {
     this.ai.setProviderEnabled(id, enabled);
+    await this.providerState.setEnabled("ai", id, enabled);
     return { id, enabled };
+  }
+
+  /** Adds a user-defined provider speaking the standard OpenAI-compatible
+   * /chat/completions shape — for a newly-released vendor not in the
+   * hardcoded catalog, without writing a new adapter package. */
+  async addCustomProvider(
+    label: string,
+    baseUrl: string,
+    model: string,
+    apiKey: string
+  ): Promise<{ id: string }> {
+    if (!label.trim() || !baseUrl.trim() || !model.trim() || !apiKey.trim()) {
+      throw new Error("Label, base URL, model, and API key are all required.");
+    }
+
+    const row = await prisma.customProvider.create({
+      data: { label, baseUrl, model, apiKey },
+    });
+
+    this.ai.registerProvider(
+      new CustomOpenAICompatibleProvider(row.id, baseUrl, model),
+      [{ id: `${row.id}-ui`, value: apiKey }]
+    );
+
+    return { id: row.id };
+  }
+
+  customProviders() {
+    return prisma.customProvider.findMany({
+      select: { id: true, label: true, baseUrl: true, model: true, createdAt: true },
+    });
+  }
+
+  /** Clears a provider's key both live (so it stops being usable
+   * immediately, not just after a restart) and in Postgres. For a
+   * catalog provider this leaves it registered-but-keyless — activating
+   * it again just supplies a new key. For a custom provider, also
+   * deletes its CustomProvider row so it doesn't reappear on restart. */
+  async removeProviderKey(id: string): Promise<{ id: string }> {
+    if (this.ai.hasProvider(id)) {
+      this.ai.clearProviderKeys(id);
+    }
+
+    await this.providerKeys.remove("ai", id);
+    await prisma.customProvider.deleteMany({ where: { id } });
+
+    return { id };
   }
 
   usage() {

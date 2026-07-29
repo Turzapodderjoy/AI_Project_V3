@@ -27,4 +27,14 @@ export class ProviderKeyStore {
       update: { apiKey },
     });
   }
+
+  /** Deletes the persisted key. Doesn't remove the provider from the
+   * running manager's registry (no unregister capability exists there),
+   * but a caller should also clear its in-memory keys — see
+   * AIManager.clearProviderKeys()/EmbeddingManager equivalent — so
+   * hasUsableKey() correctly flips to false immediately, not just after
+   * a restart. */
+  async remove(kind: ProviderKind, providerId: string): Promise<void> {
+    await prisma.providerApiKey.deleteMany({ where: { kind, providerId } });
+  }
 }

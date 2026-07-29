@@ -170,6 +170,24 @@ export function ChatWidget({
     }
   }
 
+  function exportChat() {
+    const lines = messages.map((m) => {
+      const speaker = m.role === "user" ? "You" : m.role === "agent" ? "Agent" : "Assistant";
+      return `${speaker}: ${m.content}`;
+    });
+
+    const blob = new Blob([`Chat ${sessionId}\n\n${lines.join("\n\n")}\n`], {
+      type: "text/plain",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${sessionId || "chat"}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function newChat() {
     if (!nameReady) return;
     window.localStorage.removeItem(sessionKey(businessId));
@@ -227,6 +245,13 @@ export function ChatWidget({
           style={{ fontSize: 12, padding: "1px 6px", cursor: "pointer" }}
         >
           New chat
+        </button>{" "}
+        <button
+          onClick={exportChat}
+          disabled={messages.length === 0}
+          style={{ fontSize: 12, padding: "1px 6px", cursor: "pointer" }}
+        >
+          Export chat
         </button>
       </p>
 

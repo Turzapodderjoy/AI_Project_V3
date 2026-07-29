@@ -148,6 +148,19 @@ export class EmbeddingManager {
     entry.keyManager.registerKeys(name, [{ id: `${name}-ui`, value: apiKey }]);
   }
 
+  /** Same reasoning as AIManager.clearProviderKeys() — registerKeys()
+   * fully replaces the key map, so an empty array leaves none, making
+   * hasAnyUsableKey() correctly return false immediately. */
+  clearProviderKeys(name: string): void {
+    const entry = this.providers.get(name.toLowerCase());
+
+    if (!entry) {
+      throw new Error(`Embedding provider ${name} is not registered.`);
+    }
+
+    entry.keyManager.registerKeys(name, []);
+  }
+
   registerProvider(provider: EmbeddingProvider, keys: ProviderKey[]): void {
     const name = provider.name.toLowerCase();
 

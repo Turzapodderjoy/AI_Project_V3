@@ -125,7 +125,7 @@ export default function DashboardPage() {
       {/* Every panel stays mounted (hidden via CSS, not unmounted) so
           switching tabs never wipes a panel's local state. */}
       <div style={{ display: tab === "overview" ? "block" : "none" }}>
-        <OverviewPanel />
+        <OverviewPanel active={tab === "overview"} />
       </div>
       <div style={{ display: tab === "ai" ? "block" : "none" }}>
         <AiProvidersPanel />
@@ -292,16 +292,31 @@ function ClientsPanel() {
 
 function AiProvidersPanel() {
   const [data, setData] = useState<ProvidersResponse | null>(null);
+  const [customLabels, setCustomLabels] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  const [customLabel, setCustomLabel] = useState("");
+  const [customBaseUrl, setCustomBaseUrl] = useState("");
+  const [customModel, setCustomModel] = useState("");
+  const [customApiKey, setCustomApiKey] = useState("");
+  const [customSaving, setCustomSaving] = useState(false);
+  const [customMessage, setCustomMessage] = useState("");
 
   function refresh() {
     fetch("/api/admin/providers")
       .then((r) => r.json())
       .then(setData);
+
+    fetch("/api/admin/providers/custom")
+      .then((r) => r.json())
+      .then((d: { providers: { id: string; label: string }[] }) =>
+        setCustomLabels(Object.fromEntries(d.providers.map((p) => [p.id, p.label])))
+      );
   }
 
   useEffect(refresh, []);
@@ -324,6 +339,32 @@ function AiProvidersPanel() {
       }
     } finally {
       setToggling(null);
+    }
+  }
+
+  async function remove(name: string) {
+    const confirmed = window.confirm(
+      `Remove the API key for "${customLabels[name] ?? name}"? It stays registered but won't be usable until re-activated with a new key.`
+    );
+    if (!confirmed) return;
+
+    setRemoving(name);
+
+    try {
+      const res = await fetch("/api/admin/providers/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: name }),
+      });
+
+      if (res.ok) {
+        refresh();
+      } else {
+        const result = await res.json();
+        setMessage(`Error: ${result.error}`);
+      }
+    } finally {
+      setRemoving(null);
     }
   }
 
@@ -362,6 +403,45 @@ function AiProvidersPanel() {
     }
   }
 
+  /** For a newly-released provider not in the hardcoded catalog — any
+   * vendor speaking the standard OpenAI-compatible /chat/completions
+   * shape works here without writing a new adapter package. */
+  async function addCustomProvider() {
+    if (!customLabel.trim() || !customBaseUrl.trim() || !customModel.trim() || !customApiKey.trim()) return;
+    setCustomSaving(true);
+    setCustomMessage("");
+
+    try {
+      const res = await fetch("/api/admin/providers/custom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: customLabel,
+          baseUrl: customBaseUrl,
+          model: customModel,
+          apiKey: customApiKey,
+        }),
+      });
+      const result = await res.json();
+
+      setCustomMessage(
+        res.ok
+          ? `Added "${customLabel}" — live now, and saved permanently.`
+          : `Error: ${result.error}`
+      );
+
+      if (res.ok) {
+        setCustomLabel("");
+        setCustomBaseUrl("");
+        setCustomModel("");
+        setCustomApiKey("");
+        refresh();
+      }
+    } finally {
+      setCustomSaving(false);
+    }
+  }
+
   return (
     <section style={cardStyle}>
       <h2 style={{ marginTop: 0 }}>AI Providers</h2>
@@ -390,7 +470,7 @@ function AiProvidersPanel() {
             <tbody>
               {data.status.map((p) => (
                 <tr key={p.name}>
-                  <td style={cellStyle}>{p.name}</td>
+                  <td style={cellStyle}>{customLabels[p.name] ?? p.name}</td>
                   <td style={cellStyle}>{p.enabled ? "🟢 On" : "⚪ Off"}</td>
                   <td style={cellStyle}>{p.healthy ? "✅" : "❌"}</td>
                   <td style={cellStyle}>{p.hasUsableKey ? "✅" : "❌"}</td>
@@ -403,6 +483,12 @@ function AiProvidersPanel() {
                       disabled={toggling === p.name}
                     >
                       {toggling === p.name ? "…" : p.enabled ? "Turn off" : "Turn on"}
+                    </button>{" "}
+                    <button
+                      onClick={() => remove(p.name)}
+                      disabled={removing === p.name || !p.hasUsableKey}
+                    >
+                      {removing === p.name ? "…" : "Remove key"}
                     </button>
                   </td>
                 </tr>
@@ -416,6 +502,45 @@ function AiProvidersPanel() {
               )}
             </tbody>
           </table>
+
+          <h3 style={{ marginTop: 24 }}>Add a custom provider</h3>
+          <p style={{ opacity: 0.6 }}>
+            Not in the list below? Any provider speaking the standard
+            OpenAI-compatible /chat/completions API (which covers most
+            newly-released providers) can be added here directly — no code
+            change needed.
+          </p>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              style={{ padding: 8, width: 140 }}
+              placeholder="Label (e.g. Kimi)"
+              value={customLabel}
+              onChange={(e) => setCustomLabel(e.target.value)}
+            />
+            <input
+              style={{ padding: 8, flex: 1, minWidth: 220 }}
+              placeholder="Base URL (e.g. https://api.example.com/v1/chat/completions)"
+              value={customBaseUrl}
+              onChange={(e) => setCustomBaseUrl(e.target.value)}
+            />
+            <input
+              style={{ padding: 8, width: 160 }}
+              placeholder="Model name"
+              value={customModel}
+              onChange={(e) => setCustomModel(e.target.value)}
+            />
+            <input
+              style={{ padding: 8, width: 160 }}
+              placeholder="API key"
+              type="password"
+              value={customApiKey}
+              onChange={(e) => setCustomApiKey(e.target.value)}
+            />
+            <button onClick={addCustomProvider} disabled={customSaving}>
+              {customSaving ? "Saving…" : "Add"}
+            </button>
+          </div>
+          {customMessage && <p style={{ fontSize: 13, opacity: 0.8 }}>{customMessage}</p>}
 
           <h3 style={{ marginTop: 24 }}>Add / activate a provider</h3>
           <p style={{ opacity: 0.6 }}>
@@ -469,6 +594,7 @@ function EmbeddingProvidersPanel() {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
 
   function refresh() {
     fetch("/api/admin/embedding-providers")
@@ -496,6 +622,32 @@ function EmbeddingProvidersPanel() {
       }
     } finally {
       setToggling(null);
+    }
+  }
+
+  async function remove(name: string) {
+    const confirmed = window.confirm(
+      `Remove the API key for "${name}"? It stays registered but won't be usable until re-activated with a new key.`
+    );
+    if (!confirmed) return;
+
+    setRemoving(name);
+
+    try {
+      const res = await fetch("/api/admin/embedding-providers/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: name }),
+      });
+
+      if (res.ok) {
+        refresh();
+      } else {
+        const result = await res.json();
+        setMessage(`Error: ${result.error}`);
+      }
+    } finally {
+      setRemoving(null);
     }
   }
 
@@ -578,6 +730,12 @@ function EmbeddingProvidersPanel() {
                       disabled={toggling === p.name}
                     >
                       {toggling === p.name ? "…" : p.enabled ? "Turn off" : "Turn on"}
+                    </button>{" "}
+                    <button
+                      onClick={() => remove(p.name)}
+                      disabled={removing === p.name || !p.hasUsableKey}
+                    >
+                      {removing === p.name ? "…" : "Remove key"}
                     </button>
                   </td>
                 </tr>

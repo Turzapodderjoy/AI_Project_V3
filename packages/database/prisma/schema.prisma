@@ -302,6 +302,36 @@ model ProviderApiKey {
   @@unique([kind, providerId])
 }
 
+// Dashboard's provider on/off toggle, persisted so it survives a
+// restart — same reasoning as ProviderApiKey above (activating a key
+// only ever patched the running AIManager/EmbeddingManager in memory).
+// Only rows for EXPLICITLY DISABLED providers need to exist — a provider
+// with no row here is enabled by default, matching AIManager's own
+// in-memory default.
+model ProviderState {
+  kind       String
+  providerId String
+  enabled    Boolean  @default(true)
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@id([kind, providerId])
+}
+
+// A user-added AI chat provider not in the hardcoded catalog — any
+// OpenAI-compatible /chat/completions API (which covers the overwhelming
+// majority of newly-released providers, same shape already used by
+// OpenRouter/Cerebras/Mistral) can be added this way without writing a
+// new adapter package for every new vendor. id doubles as the provider
+// name AIManager registers it under.
+model CustomProvider {
+  id        String   @id @default(cuid())
+  label     String
+  baseUrl   String
+  model     String
+  apiKey    String
+  createdAt DateTime @default(now())
+}
+
 // One row per conversation the daily training-pipeline cron has looked
 // at — the permanent, human-readable audit trail ("full track record
 // with findings") regardless of whether anything was extracted. Kept

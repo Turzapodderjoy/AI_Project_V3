@@ -239,6 +239,9 @@ importers:
       '@ai-chat-platform/conversation':
         specifier: workspace:*
         version: link:../conversation
+      '@ai-chat-platform/database':
+        specifier: workspace:*
+        version: link:../database
       '@ai-chat-platform/embedding-catalog':
         specifier: workspace:*
         version: link:../embedding-catalog

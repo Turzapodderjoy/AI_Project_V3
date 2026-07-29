@@ -11,7 +11,8 @@ import { EMBEDDING_PROVIDER_CATALOG } from "@ai-chat-platform/embedding-catalog"
  */
 export function registerEmbeddingProviders(
   manager: EmbeddingManager,
-  persistedKeys: Record<string, string> = {}
+  persistedKeys: Record<string, string> = {},
+  persistedDisabled: string[] = []
 ): void {
   for (const entry of EMBEDDING_PROVIDER_CATALOG) {
     const persisted = persistedKeys[entry.id];
@@ -27,5 +28,14 @@ export function registerEmbeddingProviders(
         value: apiKey,
       },
     ]);
+  }
+
+  // See register-providers.ts's identical comment — persisted disable
+  // state must be applied after every provider that will exist this run
+  // is registered.
+  for (const id of persistedDisabled) {
+    if (manager.hasProvider(id)) {
+      manager.setProviderEnabled(id, false);
+    }
   }
 }

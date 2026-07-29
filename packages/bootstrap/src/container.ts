@@ -4,7 +4,7 @@ import { ConversationService, MessageFeedbackService } from "@ai-chat-platform/c
 import type { Retriever } from "@ai-chat-platform/retriever";
 import type { VectorStoreManager } from "@ai-chat-platform/vector-store";
 import type { EmbeddingManager } from "@ai-chat-platform/embedding-manager";
-import type { ProviderKeyStore } from "@ai-chat-platform/provider-keys";
+import type { ProviderKeyStore, ProviderStateStore } from "@ai-chat-platform/provider-keys";
 import { ChatService, ChatUsageLog, ResponseCache } from "@ai-chat-platform/chat-service";
 import { AiConfigService } from "@ai-chat-platform/ai-config";
 import { RagService } from "@ai-chat-platform/rag";
@@ -43,7 +43,8 @@ export class Container {
     vectorStore: VectorStoreManager,
     embeddings: EmbeddingManager,
     ai: AIManager,
-    providerKeys: ProviderKeyStore
+    providerKeys: ProviderKeyStore,
+    providerState: ProviderStateStore
   ) {
 
     const conversations =
@@ -151,12 +152,13 @@ export class Container {
           tenants,
           conversations,
           crawlerService,
-          providerKeys
+          providerKeys,
+          providerState
         ),
         new HandoffController(conversations),
         new CrawlerController(crawlerService),
         new AiConfigController(aiConfig, tenants),
-        new EmbeddingController(embeddings, providerKeys, indexingService),
+        new EmbeddingController(embeddings, providerKeys, indexingService, providerState),
         new TrainingController(
           chatAnalysisService,
           aiConfig,

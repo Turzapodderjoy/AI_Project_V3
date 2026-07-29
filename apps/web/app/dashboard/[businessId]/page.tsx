@@ -83,7 +83,7 @@ export default function ClientDashboardPage() {
       onSelect={setTab}
     >
       <div style={{ display: tab === "overview" ? "block" : "none" }}>
-        <ClientOverviewPanel businessId={businessId} />
+        <ClientOverviewPanel businessId={businessId} active={tab === "overview"} />
       </div>
       <div style={{ display: tab === "knowledge" ? "block" : "none" }}>
         <KnowledgeHubPanel businessId={businessId} />

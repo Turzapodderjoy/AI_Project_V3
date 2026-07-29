@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const app = await getApp();
-    const result = app.container.router.admin.setProviderEnabled(body.id, body.enabled);
+    const result = await app.container.router.admin.setProviderEnabled(body.id, body.enabled);
     return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json(

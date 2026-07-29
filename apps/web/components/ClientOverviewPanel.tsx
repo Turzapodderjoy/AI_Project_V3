@@ -23,13 +23,18 @@ interface CoverageEntry {
  * already fetch" approach as the mother dashboard's OverviewPanel, just
  * scoped to this one business.
  */
-export function ClientOverviewPanel({ businessId }: { businessId: string }) {
+export function ClientOverviewPanel({ businessId, active = true }: { businessId: string; active?: boolean }) {
   const [storage, setStorage] = useState<StorageInfo | null>(null);
   const [openHandoffs, setOpenHandoffs] = useState<number | null>(null);
   const [coverage, setCoverage] = useState<CoverageEntry[] | null>(null);
   const [aiBrainUpdatedAt, setAiBrainUpdatedAt] = useState<string | null>(null);
 
+  // Refetches on every re-activation of this tab, not just on mount —
+  // see OverviewPanel's comment for why (panels stay permanently
+  // mounted across tab switches to preserve Chat Demo's state).
   useEffect(() => {
+    if (!active) return;
+
     fetch(`/api/admin/storage?businessId=${encodeURIComponent(businessId)}`)
       .then((r) => r.json())
       .then(setStorage);
@@ -47,7 +52,7 @@ export function ClientOverviewPanel({ businessId }: { businessId: string }) {
     fetch(`/api/admin/ai-config?businessId=${encodeURIComponent(businessId)}`)
       .then((r) => r.json())
       .then((d: { createdAt: string }) => setAiBrainUpdatedAt(d.createdAt));
-  }, [businessId]);
+  }, [businessId, active]);
 
   const fullyCovered =
     coverage && coverage.length > 0

@@ -3,7 +3,7 @@ import {
   EMBEDDING_PROVIDER_CATALOG,
   PLANNED_EMBEDDING_PROVIDERS,
 } from "@ai-chat-platform/embedding-catalog";
-import { ProviderKeyStore } from "@ai-chat-platform/provider-keys";
+import { ProviderKeyStore, ProviderStateStore } from "@ai-chat-platform/provider-keys";
 import { IndexingService } from "@ai-chat-platform/indexing";
 
 /**
@@ -18,7 +18,8 @@ export class EmbeddingController {
   constructor(
     private readonly embeddings: EmbeddingManager,
     private readonly providerKeys: ProviderKeyStore,
-    private readonly indexing: IndexingService
+    private readonly indexing: IndexingService,
+    private readonly providerState: ProviderStateStore
   ) {}
 
   providers() {
@@ -93,10 +94,23 @@ export class EmbeddingController {
   }
 
   /** Forces an embedding provider on/off for experimentation — same
-   * semantics as AdminController.setProviderEnabled(). */
-  setProviderEnabled(id: string, enabled: boolean): { id: string; enabled: boolean } {
+   * semantics as AdminController.setProviderEnabled(), including the
+   * same persistence fix (previously reverted to enabled on restart). */
+  async setProviderEnabled(id: string, enabled: boolean): Promise<{ id: string; enabled: boolean }> {
     this.embeddings.setProviderEnabled(id, enabled);
+    await this.providerState.setEnabled("embedding", id, enabled);
     return { id, enabled };
+  }
+
+  /** Same semantics as AdminController.removeProviderKey(). */
+  async removeProviderKey(id: string): Promise<{ id: string }> {
+    if (this.embeddings.hasProvider(id)) {
+      this.embeddings.clearProviderKeys(id);
+    }
+
+    await this.providerKeys.remove("embedding", id);
+
+    return { id };
   }
 
   usage() {

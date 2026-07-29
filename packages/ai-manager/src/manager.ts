@@ -106,6 +106,21 @@ export class AIManager {
     ]);
   }
 
+  /** Removes every key for an already-registered provider — registerKeys()
+   * fully replaces the key map, so an empty array leaves it with none,
+   * which makes hasAnyUsableKey() correctly return false immediately
+   * (not just after a restart). The provider stays registered (no
+   * unregister capability exists), just unusable until re-activated. */
+  clearProviderKeys(name: string): void {
+    const entry = this.providers.get(name.toLowerCase());
+
+    if (!entry) {
+      throw new Error(`Provider ${name} is not registered.`);
+    }
+
+    entry.keyManager.registerKeys(name, []);
+  }
+
   registerProvider(provider: AIProvider, keys: ProviderKey[]): void {
     const name = provider.name.toLowerCase();
 
