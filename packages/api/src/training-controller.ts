@@ -4,7 +4,8 @@ import {
   PromptSuggestionService,
   PipelineRunService,
 } from "@ai-chat-platform/training-pipeline";
-import { AiConfigService } from "@ai-chat-platform/ai-config";
+import { AiConfigService, PLATFORM_CONFIG_ID } from "@ai-chat-platform/ai-config";
+import type { TenantService } from "@ai-chat-platform/tenant";
 
 /**
  * Read/decide surface for the Training & Insights dashboard panel — the
@@ -19,7 +20,8 @@ export class TrainingController {
     private readonly aiConfig: AiConfigService,
     private readonly pipeline: ChatAnalysisPipeline,
     private readonly suggestions: PromptSuggestionService,
-    private readonly runs_: PipelineRunService
+    private readonly runs_: PipelineRunService,
+    private readonly tenants: TenantService
   ) {}
 
   /** The daily 5am BST cron's entry point (triggeredBy "cron") — also
@@ -126,6 +128,44 @@ export class TrainingController {
     const suggestion = await this.suggestions.suggestFromFindings(businessId, [findings]);
 
     return { verdict, findings, suggestion };
+  }
+
+  /** Mother dashboard's Training Arena (general/platform-wide training,
+   * as opposed to a client dashboard's Training Arena which only ever
+   * touches that one business) — same reasoning as
+   * AiConfigController.broadcastAppend(): applies the fix to the
+   * platform default AND every existing client's own current prompt in
+   * one go, since a general-behavior correction (tone, handoff wording,
+   * format rules) should apply everywhere immediately, not just to
+   * clients who haven't customized their prompt yet. Same underlying
+   * write (AiConfigService.append(), one new AiConfigVersion per
+   * business) as a manual edit or a normal single-business accept. */
+  async acceptAndBroadcastSuggestion(id: string): Promise<{ accepted: string; businessIds: string[] }> {
+    const suggestion = await this.analysis.getSuggestion(id);
+
+    if (!suggestion) {
+      throw new Error(`Suggestion ${id} not found.`);
+    }
+
+    if (suggestion.status !== "pending") {
+      throw new Error(`Suggestion ${id} has already been ${suggestion.status}.`);
+    }
+
+    if (!suggestion.proposedAppendText) {
+      throw new Error("Suggestion is missing its proposed append text.");
+    }
+
+    const businesses = await this.tenants.listAll();
+    const targets = [PLATFORM_CONFIG_ID, ...businesses.map((b) => b.id)];
+    const note = `Training Arena (broadcast to all clients): ${suggestion.reasoning.slice(0, 150)}`;
+
+    for (const businessId of targets) {
+      await this.aiConfig.append(businessId, suggestion.proposedAppendText, note);
+    }
+
+    await this.analysis.decideSuggestion(id, "accepted");
+
+    return { accepted: id, businessIds: targets };
   }
 
   async declineSuggestion(id: string): Promise<{ declined: string }> {

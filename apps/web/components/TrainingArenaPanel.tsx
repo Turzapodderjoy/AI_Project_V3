@@ -31,7 +31,16 @@ function newSessionId(): string {
  * on demand, and — if there's real signal — proposes a concrete AI Brain
  * change you can review and Save or Discard, reusing the exact same
  * accept/decline machinery the Training & Insights panel's suggestions do. */
-export function TrainingArenaPanel({ businessId }: { businessId: string }) {
+export function TrainingArenaPanel({
+  businessId,
+  broadcast = false,
+}: {
+  businessId: string;
+  /** Mother dashboard's Training Arena (general/platform-wide training) —
+   * Save applies the fix to the platform default AND every existing
+   * client at once, instead of just this one business. */
+  broadcast?: boolean;
+}) {
   const [sessionId, setSessionId] = useState(newSessionId());
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -105,18 +114,27 @@ export function TrainingArenaPanel({ businessId }: { businessId: string }) {
     setDeciding(true);
 
     try {
-      const res = await fetch(`/api/admin/training/suggestions/${accept ? "accept" : "decline"}`, {
+      const endpoint = !accept
+        ? "decline"
+        : broadcast
+          ? "broadcast-accept"
+          : "accept";
+
+      const res = await fetch(`/api/admin/training/suggestions/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: review.suggestion.id }),
       });
+      const data = await res.json();
 
       setMessage(
         res.ok
           ? accept
-            ? "Saved — the AI Brain now has this rule."
+            ? broadcast
+              ? `Saved — pushed to the platform default and ${data.businessIds.length - 1} client(s).`
+              : "Saved — the AI Brain now has this rule."
             : "Discarded — nothing changed."
-          : `Error: ${(await res.json()).error}`
+          : `Error: ${data.error}`
       );
 
       if (res.ok) {
@@ -129,13 +147,16 @@ export function TrainingArenaPanel({ businessId }: { businessId: string }) {
 
   return (
     <section style={cardStyle}>
-      <h2 style={{ marginTop: 0 }}>Training Arena</h2>
+      <h2 style={{ marginTop: 0 }}>Training Arena{broadcast ? " (general — applies to all clients)" : ""}</h2>
       <p style={subtleTextStyle}>
         Talk to the AI directly to provoke and correct its real behavior —
         the same retrieval/prompt/handoff pipeline a real customer hits,
         except it keeps responding even after a handoff, so you can argue
         with it and see how it reasons. End the session to review what it
         learned and decide whether to save that as a real AI Brain rule.
+        {broadcast
+          ? " This is the platform-wide arena — saving here pushes the fix to the platform default AND every existing client at once, for general behavior (tone, handoff wording, format) rather than product-specific content. There's no shared knowledge base here, so product questions won't retrieve anything real."
+          : ""}
       </p>
 
       <div
@@ -210,7 +231,7 @@ export function TrainingArenaPanel({ businessId }: { businessId: string }) {
               <p style={subtleTextStyle}>Why: {review.suggestion.reasoning}</p>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => decide(true)} disabled={deciding}>
-                  {deciding ? "…" : "Save to AI Brain"}
+                  {deciding ? "…" : broadcast ? "Save to ALL clients" : "Save to AI Brain"}
                 </button>
                 <button onClick={() => decide(false)} disabled={deciding}>
                   {deciding ? "…" : "Discard"}

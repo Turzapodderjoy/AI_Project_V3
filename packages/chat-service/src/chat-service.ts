@@ -250,8 +250,13 @@ export class ChatService {
     // to. The AI's own [[NEEDS_HUMAN]] marker (below) is now the accurate
     // decision-maker for "can't help"/"customer asked for a human" — this
     // check's only remaining job is to avoid wasting an LLM call on a
-    // business with zero indexed content at all.
-    if (retrieved.length === 0) {
+    // business with zero indexed content at all. Training Arena sessions
+    // never take this shortcut regardless of retrieval results — the
+    // platform-wide Training Arena has NO knowledge base by design (it's
+    // for testing general behavior, not product content), so this check
+    // would otherwise fire on every single message there and the AI
+    // would never actually be reached — defeating the entire feature.
+    if (!request.isTraining && retrieved.length === 0) {
       const fullHistory = [
         ...priorHistory,
         { id: "pending", role: "user" as const, content: request.message, createdAt: new Date() },

@@ -100,15 +100,24 @@ export class ChatAnalysisPipeline {
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
 
-    await this.analyzeOne({
-      id: conversation.id,
-      businessId: conversation.businessId,
-      messages: conversation.messages.map((m) => ({ id: m.id, role: m.role, content: m.content })),
-    });
+    // Idempotent — a double-click on "End session & review" (or any other
+    // retry) would otherwise crash on ChatAnalysis.conversationId's
+    // unique constraint, the same failure class already fixed once for
+    // the batch pipeline (see unprocessedConversations()'s comment).
+    // Re-analyzing wastes nothing here besides an LLM call, so simplest
+    // fix is just to skip straight to returning the existing row.
+    const existing = await prisma.chatAnalysis.findUnique({ where: { conversationId } });
+
+    if (!existing) {
+      await this.analyzeOne({
+        id: conversation.id,
+        businessId: conversation.businessId,
+        messages: conversation.messages.map((m) => ({ id: m.id, role: m.role, content: m.content })),
+      });
+    }
 
     // ChatAnalysis.conversationId is @unique, so this is exactly the row
-    // analyzeOne() just wrote — precise, no risk of a race with another
-    // conversation's analysis landing between the write and this read.
+    // analyzeOne() just wrote (or the pre-existing one from above).
     const record = await prisma.chatAnalysis.findUniqueOrThrow({ where: { conversationId } });
 
     return { businessId: conversation.businessId, verdict: record.verdict, findings: record.findings };

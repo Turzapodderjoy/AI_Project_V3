@@ -10,10 +10,16 @@ import { TrainingPanel } from "../../components/TrainingPanel";
 import { QaReviewPanel } from "../../components/QaReviewPanel";
 import { PlatformChannelAppsPanel } from "../../components/PlatformChannelAppsPanel";
 import { OverviewPanel } from "../../components/OverviewPanel";
+import { TrainingArenaPanel } from "../../components/TrainingArenaPanel";
 import { DashboardShell, type NavGroup } from "../../components/DashboardShell";
 import { cardStyle, cellStyle, formatBytes } from "../../components/dashboard-styles";
 
-type Tab = "overview" | "ai" | "embedding" | "brain" | "training" | "qa" | "channels" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
+// PLATFORM_CONFIG_ID as used by @ai-chat-platform/ai-config — kept as a
+// plain literal here rather than importing a backend package into this
+// client component just for one string constant.
+const PLATFORM_CONFIG_ID = "__platform__";
+
+type Tab = "overview" | "ai" | "embedding" | "brain" | "training" | "arena" | "qa" | "channels" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
 
 const NAV_GROUPS: NavGroup<Tab>[] = [
   { items: [{ id: "overview", label: "Overview" }] },
@@ -23,6 +29,7 @@ const NAV_GROUPS: NavGroup<Tab>[] = [
     items: [
       { id: "brain", label: "AI Brain" },
       { id: "training", label: "Training & Insights" },
+      { id: "arena", label: "Training Arena" },
       { id: "qa", label: "QA Review" },
     ],
   },
@@ -138,6 +145,9 @@ export default function DashboardPage() {
       </div>
       <div style={{ display: tab === "training" ? "block" : "none" }}>
         <TrainingPanel />
+      </div>
+      <div style={{ display: tab === "arena" ? "block" : "none" }}>
+        <TrainingArenaPanel businessId={PLATFORM_CONFIG_ID} broadcast />
       </div>
       <div style={{ display: tab === "qa" ? "block" : "none" }}>
         <QaReviewPanel />
