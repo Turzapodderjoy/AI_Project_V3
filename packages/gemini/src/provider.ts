@@ -19,13 +19,21 @@ export class GeminiProvider implements AIProvider {
     try {
       const client = new GoogleGenAI({ apiKey });
 
+      const hasConfig =
+        request.temperature !== undefined ||
+        request.systemPrompt !== undefined ||
+        request.maxTokens !== undefined;
+
       const response = await client.models.generateContent({
         model: DEFAULT_MODEL,
         contents: request.message,
-        config:
-          request.temperature === undefined
-            ? undefined
-            : { temperature: request.temperature },
+        config: hasConfig
+          ? {
+              temperature: request.temperature,
+              systemInstruction: request.systemPrompt,
+              maxOutputTokens: request.maxTokens,
+            }
+          : undefined,
       });
 
       return {

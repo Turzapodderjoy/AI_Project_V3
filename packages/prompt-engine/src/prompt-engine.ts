@@ -12,9 +12,7 @@ export class PromptEngine {
         ? input.history.map((turn) => `${turn.role}: ${turn.content}`).join("\n")
         : null;
 
-    const prompt = `
-${input.systemPrompt}
-
+    const userPrompt = `
 ------------------------
 Knowledge Base
 ------------------------
@@ -32,14 +30,11 @@ User
 ------------------------
 
 ${input.userMessage}
-
-------------------------
-Assistant
-------------------------
 `.trim();
 
     return {
-      prompt,
+      systemPrompt: input.systemPrompt,
+      userPrompt,
     };
   }
 }

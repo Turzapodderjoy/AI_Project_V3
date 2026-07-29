@@ -262,13 +262,15 @@ export class AIManager {
 
   async chat(
     message: string,
-    temperature?: number
+    options: { temperature?: number; systemPrompt?: string; maxTokens?: number } = {}
   ): Promise<{ provider: string; response: string; tokens: number }> {
     const result = await this.generate({
       userId: "anonymous",
       sessionId: "anonymous",
       message,
-      temperature,
+      temperature: options.temperature,
+      systemPrompt: options.systemPrompt,
+      maxTokens: options.maxTokens,
     });
 
     return {

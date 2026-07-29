@@ -3,16 +3,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getApp } from "../../../../lib/app";
 
 /**
- * Not actually driven by Vercel's own cron scheduler (see vercel.json's
- * comment on this entry) — Vercel's free/Hobby plan only fires cron jobs
- * once a day regardless of the schedule expression, and this needs to run
- * every 30 minutes AND work identically for an offline/local deployment
- * (which has no Vercel cron at all). The real 30-minute cadence comes from
- * an external trigger (a free GitHub Actions scheduled workflow, a service
- * like cron-job.org, or a local Task Scheduler entry for the offline case)
- * hitting this route with the CRON_SECRET bearer header. This route is
- * registered in vercel.json anyway so it's a normal discoverable endpoint
- * either way.
+ * Deliberately NOT listed in vercel.json's crons array — Vercel's free/
+ * Hobby plan doesn't just silently cap a sub-daily schedule to once/day,
+ * it REJECTS THE ENTIRE DEPLOY at build time with "Hobby accounts are
+ * limited to daily cron jobs" if any cron entry runs more than once a
+ * day (confirmed live). Since this needs to run every 30 minutes AND
+ * work identically for an offline/local deployment (which has no Vercel
+ * cron at all), the real cadence comes from an external trigger instead —
+ * see .github/workflows/auto-heal.yml (a free GitHub Actions scheduled
+ * workflow, no Vercel plan change needed) hitting this route with the
+ * CRON_SECRET bearer header every 30 minutes. This route is still a
+ * completely normal, always-deployed API endpoint — it just isn't driven
+ * by Vercel's own scheduler.
  *
  * Unlike the other 3 cron routes (crawl/backfill-embeddings/training-
  * pipeline), this one wraps the call in try/catch — AutoHealService.run()

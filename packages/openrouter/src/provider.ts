@@ -30,8 +30,14 @@ export class OpenRouterProvider implements AIProvider {
       },
       body: JSON.stringify({
         model: DEFAULT_MODEL,
-        messages: [{ role: "user", content: request.message }],
+        messages: [
+          ...(request.systemPrompt
+            ? [{ role: "system", content: request.systemPrompt }]
+            : []),
+          { role: "user", content: request.message },
+        ],
         temperature: request.temperature,
+        max_tokens: request.maxTokens,
       }),
     });
 

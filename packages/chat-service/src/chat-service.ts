@@ -25,6 +25,18 @@ import type {
 // to the bot forever.
 const HANDOFF_MARKER = "[[NEEDS_HUMAN]]";
 
+// Applied identically across every registered AI provider (see
+// AIRequest.maxTokens) — comfortably covers a detailed multi-item answer
+// (a product list with prices, a multi-step explanation) without letting
+// one provider's answers run substantially longer than another's just
+// because that vendor's own default cap happens to be bigger.
+const ANSWER_MAX_TOKENS = 1024;
+
+// The handoff summary is a short internal note for a human agent, not a
+// customer-facing answer — a smaller cap is appropriate and keeps this
+// background call cheap regardless of which provider handles it.
+const SUMMARY_MAX_TOKENS = 300;
+
 const HANDOFF_MESSAGE_EN =
   "I don't have any information about that in our knowledge base. Let me connect you with a team member who can help — they'll pick up right where this conversation left off.";
 
@@ -281,8 +293,12 @@ export class ChatService {
 
     const aiResponse =
       await this.ai.chat(
-        prompt.prompt,
-        config.temperature
+        prompt.userPrompt,
+        {
+          temperature: config.temperature,
+          systemPrompt: prompt.systemPrompt,
+          maxTokens: ANSWER_MAX_TOKENS,
+        }
       );
 
     // The AI itself decided (see HANDOFF_MARKER's comment) — strip the
@@ -354,7 +370,8 @@ export class ChatService {
 
     try {
       const result = await this.ai.chat(
-        `Summarize this customer conversation in 2-3 sentences for a support agent taking over. Focus on what the customer wants and what's unresolved. The conversation may be in Bangla, Banglish, or English — write the summary in English regardless, since it's for internal review.\n\n${transcript}`
+        `Summarize this customer conversation in 2-3 sentences for a support agent taking over. Focus on what the customer wants and what's unresolved. The conversation may be in Bangla, Banglish, or English — write the summary in English regardless, since it's for internal review.\n\n${transcript}`,
+        { maxTokens: SUMMARY_MAX_TOKENS }
       );
       return result.response;
     } catch {
