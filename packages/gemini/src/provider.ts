@@ -22,7 +22,12 @@ export class GeminiProvider implements AIProvider {
       const hasConfig =
         request.temperature !== undefined ||
         request.systemPrompt !== undefined ||
-        request.maxTokens !== undefined;
+        request.maxTokens !== undefined ||
+        request.topP !== undefined ||
+        request.frequencyPenalty !== undefined ||
+        request.presencePenalty !== undefined ||
+        request.stop !== undefined ||
+        request.seed !== undefined;
 
       const response = await client.models.generateContent({
         model: DEFAULT_MODEL,
@@ -32,6 +37,11 @@ export class GeminiProvider implements AIProvider {
               temperature: request.temperature,
               systemInstruction: request.systemPrompt,
               maxOutputTokens: request.maxTokens,
+              topP: request.topP,
+              frequencyPenalty: request.frequencyPenalty,
+              presencePenalty: request.presencePenalty,
+              stopSequences: request.stop,
+              seed: request.seed,
             }
           : undefined,
       });

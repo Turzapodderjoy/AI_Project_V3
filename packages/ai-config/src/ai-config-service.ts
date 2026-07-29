@@ -19,9 +19,24 @@ export interface AiConfig {
   temperature: number;
   /** "auto" | "english" | "bangla" | "banglish" — see schema comment. */
   languageMode: string;
+  maxTokens: number;
+  topP: number | null;
+  frequencyPenalty: number | null;
+  presencePenalty: number | null;
+  stopSequences: string | null;
+  seed: number | null;
   changeType: string;
   note: string | null;
   createdAt: string;
+}
+
+export interface AiConfigParameters {
+  maxTokens: number;
+  topP: number | null;
+  frequencyPenalty: number | null;
+  presencePenalty: number | null;
+  stopSequences: string | null;
+  seed: number | null;
 }
 
 type Row = {
@@ -32,6 +47,12 @@ type Row = {
   historyTurns: number;
   temperature: number;
   languageMode: string;
+  maxTokens: number;
+  topP: number | null;
+  frequencyPenalty: number | null;
+  presencePenalty: number | null;
+  stopSequences: string | null;
+  seed: number | null;
   changeType: string;
   note: string | null;
   createdAt: Date;
@@ -46,6 +67,12 @@ function toConfig(row: Row): AiConfig {
     historyTurns: row.historyTurns,
     temperature: row.temperature,
     languageMode: row.languageMode,
+    maxTokens: row.maxTokens,
+    topP: row.topP,
+    frequencyPenalty: row.frequencyPenalty,
+    presencePenalty: row.presencePenalty,
+    stopSequences: row.stopSequences,
+    seed: row.seed,
     changeType: row.changeType,
     note: row.note,
     createdAt: row.createdAt.toISOString(),
@@ -120,6 +147,12 @@ export class AiConfigService {
         historyTurns,
         temperature,
         languageMode: current.languageMode,
+        maxTokens: current.maxTokens,
+        topP: current.topP,
+        frequencyPenalty: current.frequencyPenalty,
+        presencePenalty: current.presencePenalty,
+        stopSequences: current.stopSequences,
+        seed: current.seed,
         changeType: "update",
         note: note?.trim() || null,
       },
@@ -147,6 +180,12 @@ export class AiConfigService {
         historyTurns: current.historyTurns,
         temperature: current.temperature,
         languageMode: current.languageMode,
+        maxTokens: current.maxTokens,
+        topP: current.topP,
+        frequencyPenalty: current.frequencyPenalty,
+        presencePenalty: current.presencePenalty,
+        stopSequences: current.stopSequences,
+        seed: current.seed,
         changeType: "append",
         note: note?.trim() || additionalText.trim().slice(0, 120),
       },
@@ -171,8 +210,48 @@ export class AiConfigService {
         historyTurns: current.historyTurns,
         temperature: current.temperature,
         languageMode,
+        maxTokens: current.maxTokens,
+        topP: current.topP,
+        frequencyPenalty: current.frequencyPenalty,
+        presencePenalty: current.presencePenalty,
+        stopSequences: current.stopSequences,
+        seed: current.seed,
         changeType: "language",
         note: note?.trim() || `Language locked to ${languageMode}`,
+      },
+    });
+
+    return toConfig(created);
+  }
+
+  /** Overrides all AI providers for this business with the same tuning
+   * parameters (answer length, sampling controls) — a separate control
+   * from the prompt editor, so tuning knobs don't require touching prompt
+   * text. Everything else (prompt, floor, turns, temperature, language)
+   * carries forward unchanged. */
+  async setParameters(
+    businessId: string,
+    params: AiConfigParameters,
+    note?: string
+  ): Promise<AiConfig> {
+    const current = await this.getCurrent(businessId);
+
+    const created = await prisma.aiConfigVersion.create({
+      data: {
+        businessId,
+        systemPrompt: current.systemPrompt,
+        handoffFloor: current.handoffFloor,
+        historyTurns: current.historyTurns,
+        temperature: current.temperature,
+        languageMode: current.languageMode,
+        maxTokens: params.maxTokens,
+        topP: params.topP,
+        frequencyPenalty: params.frequencyPenalty,
+        presencePenalty: params.presencePenalty,
+        stopSequences: params.stopSequences,
+        seed: params.seed,
+        changeType: "parameters",
+        note: note?.trim() || "Updated AI parameters",
       },
     });
 

@@ -22,6 +22,9 @@ export interface TrainingExampleRecord {
 export interface PromptSuggestionRecord {
   id: string;
   businessId: string;
+  /** "pipeline" | "training_arena" | "dumped_chat" — which tool produced
+   * this suggestion. */
+  source: string;
   kind: string;
   proposedSystemPrompt: string | null;
   proposedAppendText: string | null;
@@ -222,6 +225,7 @@ export class ChatAnalysisService {
 
   async createSuggestion(params: {
     businessId: string;
+    source?: string;
     kind: string;
     proposedSystemPrompt?: string | null;
     proposedAppendText?: string | null;
@@ -231,6 +235,7 @@ export class ChatAnalysisService {
     const created = await prisma.promptSuggestion.create({
       data: {
         businessId: params.businessId,
+        source: params.source ?? "pipeline",
         kind: params.kind,
         proposedSystemPrompt: params.proposedSystemPrompt ?? null,
         proposedAppendText: params.proposedAppendText ?? null,
@@ -242,18 +247,18 @@ export class ChatAnalysisService {
     return toSuggestion(created);
   }
 
-  async pendingSuggestions(): Promise<PromptSuggestionRecord[]> {
+  async pendingSuggestions(businessId?: string): Promise<PromptSuggestionRecord[]> {
     const rows = await prisma.promptSuggestion.findMany({
-      where: { status: "pending" },
+      where: { status: "pending", ...(businessId ? { businessId } : {}) },
       orderBy: { createdAt: "desc" },
     });
 
     return rows.map(toSuggestion);
   }
 
-  async decidedSuggestions(limit = 50): Promise<PromptSuggestionRecord[]> {
+  async decidedSuggestions(businessId?: string, limit = 50): Promise<PromptSuggestionRecord[]> {
     const rows = await prisma.promptSuggestion.findMany({
-      where: { status: { not: "pending" } },
+      where: { status: { not: "pending" }, ...(businessId ? { businessId } : {}) },
       orderBy: { decidedAt: "desc" },
       take: limit,
     });
@@ -270,6 +275,15 @@ export class ChatAnalysisService {
     await prisma.promptSuggestion.update({
       where: { id },
       data: { status, decidedAt: new Date() },
+    });
+  }
+
+  /** Marks a suggestion superseded (refined into a new pending one) rather
+   * than deleting it — kept for the review panel's audit trail. */
+  async supersedeSuggestion(id: string): Promise<void> {
+    await prisma.promptSuggestion.update({
+      where: { id },
+      data: { status: "superseded", decidedAt: new Date() },
     });
   }
 
@@ -290,6 +304,7 @@ export class ChatAnalysisService {
 type SuggestionRow = {
   id: string;
   businessId: string;
+  source: string;
   kind: string;
   proposedSystemPrompt: string | null;
   proposedAppendText: string | null;
@@ -303,6 +318,7 @@ function toSuggestion(row: SuggestionRow): PromptSuggestionRecord {
   return {
     id: row.id,
     businessId: row.businessId,
+    source: row.source,
     kind: row.kind,
     proposedSystemPrompt: row.proposedSystemPrompt,
     proposedAppendText: row.proposedAppendText,

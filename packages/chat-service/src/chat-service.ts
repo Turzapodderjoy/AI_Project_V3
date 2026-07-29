@@ -25,13 +25,6 @@ import type {
 // to the bot forever.
 const HANDOFF_MARKER = "[[NEEDS_HUMAN]]";
 
-// Applied identically across every registered AI provider (see
-// AIRequest.maxTokens) — comfortably covers a detailed multi-item answer
-// (a product list with prices, a multi-step explanation) without letting
-// one provider's answers run substantially longer than another's just
-// because that vendor's own default cap happens to be bigger.
-const ANSWER_MAX_TOKENS = 1024;
-
 // The handoff summary is a short internal note for a human agent, not a
 // customer-facing answer — a smaller cap is appropriate and keeps this
 // background call cheap regardless of which provider handles it.
@@ -317,7 +310,14 @@ export class ChatService {
         {
           temperature: config.temperature,
           systemPrompt: prompt.systemPrompt,
-          maxTokens: ANSWER_MAX_TOKENS,
+          maxTokens: config.maxTokens,
+          topP: config.topP ?? undefined,
+          frequencyPenalty: config.frequencyPenalty ?? undefined,
+          presencePenalty: config.presencePenalty ?? undefined,
+          stop: config.stopSequences
+            ? config.stopSequences.split(",").map(s => s.trim()).filter(Boolean)
+            : undefined,
+          seed: config.seed ?? undefined,
         }
       );
 

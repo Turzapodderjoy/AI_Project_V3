@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from "react";
 
-import { ChatWidget } from "../../components/ChatWidget";
 import { KnowledgeHubPanel } from "../../components/KnowledgeHubPanel";
 import { HandoffsPanel } from "../../components/HandoffsPanel";
 import { AiBrainPanel } from "../../components/AiBrainPanel";
-import { TrainingPanel } from "../../components/TrainingPanel";
-import { QaReviewPanel } from "../../components/QaReviewPanel";
+import { AiParametersPanel } from "../../components/AiParametersPanel";
+import { TrainingReviewPanel } from "../../components/TrainingReviewPanel";
 import { PlatformChannelAppsPanel } from "../../components/PlatformChannelAppsPanel";
 import { OverviewPanel } from "../../components/OverviewPanel";
 import { TrainingArenaPanel } from "../../components/TrainingArenaPanel";
@@ -19,7 +18,7 @@ import { cardStyle, cellStyle, formatBytes } from "../../components/dashboard-st
 // client component just for one string constant.
 const PLATFORM_CONFIG_ID = "__platform__";
 
-type Tab = "overview" | "ai" | "embedding" | "brain" | "training" | "arena" | "qa" | "channels" | "usage" | "clients" | "knowledge" | "chat" | "handoffs" | "database";
+type Tab = "overview" | "ai" | "embedding" | "brain" | "parameters" | "review" | "arena" | "channels" | "usage" | "clients" | "knowledge" | "handoffs" | "database";
 
 const NAV_GROUPS: NavGroup<Tab>[] = [
   { items: [{ id: "overview", label: "Overview" }] },
@@ -28,16 +27,15 @@ const NAV_GROUPS: NavGroup<Tab>[] = [
     label: "AI Brain",
     items: [
       { id: "brain", label: "AI Brain" },
-      { id: "training", label: "Training & Insights" },
+      { id: "parameters", label: "Parameters" },
       { id: "arena", label: "Training Arena" },
-      { id: "qa", label: "QA Review" },
+      { id: "review", label: "Training Review" },
     ],
   },
   {
     label: "Content",
     items: [
       { id: "knowledge", label: "Knowledge Hub" },
-      { id: "chat", label: "Chat Demo" },
       { id: "handoffs", label: "Handoffs" },
     ],
   },
@@ -143,14 +141,14 @@ export default function DashboardPage() {
       <div style={{ display: tab === "brain" ? "block" : "none" }}>
         <AiBrainPanel />
       </div>
-      <div style={{ display: tab === "training" ? "block" : "none" }}>
-        <TrainingPanel />
+      <div style={{ display: tab === "parameters" ? "block" : "none" }}>
+        <AiParametersPanel />
       </div>
       <div style={{ display: tab === "arena" ? "block" : "none" }}>
         <TrainingArenaPanel businessId={PLATFORM_CONFIG_ID} broadcast />
       </div>
-      <div style={{ display: tab === "qa" ? "block" : "none" }}>
-        <QaReviewPanel />
+      <div style={{ display: tab === "review" ? "block" : "none" }}>
+        <TrainingReviewPanel broadcast />
       </div>
       <div style={{ display: tab === "channels" ? "block" : "none" }}>
         <PlatformChannelAppsPanel />
@@ -163,9 +161,6 @@ export default function DashboardPage() {
       </div>
       <div style={{ display: tab === "knowledge" ? "block" : "none" }}>
         <KnowledgeHubPanel />
-      </div>
-      <div style={{ display: tab === "chat" ? "block" : "none" }}>
-        <ChatWidget businessName="Mother Dashboard" />
       </div>
       <div style={{ display: tab === "handoffs" ? "block" : "none" }}>
         <HandoffsPanel />
@@ -873,7 +868,7 @@ function UsagePanel() {
             {chats.length === 0 && (
               <tr>
                 <td style={cellStyle} colSpan={5}>
-                  No chats yet — try the Chat Demo tab.
+                  No chats yet.
                 </td>
               </tr>
             )}

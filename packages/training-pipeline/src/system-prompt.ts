@@ -84,3 +84,88 @@ ${params.findingsBatch.map((f, i) => `${i + 1}. ${f}`).join("\n")}
 
 Decide whether the system prompt should change, and respond with the JSON object described in your instructions.`;
 }
+
+// Training Arena's "Dump a chat" mode — an admin pastes an already-
+// completed conversation (from any source, not necessarily this platform)
+// plus free-text instructions about what the bot should/shouldn't have
+// done, and wants a concrete prompt change proposed from it. Same
+// additive-only contract and JSON shape as PROMPT_SUGGESTION_SYSTEM_PROMPT
+// (the review/accept/decline UI is shared), but reasons from one explicit
+// human-annotated example instead of a batch of findings.
+export const DUMPED_CHAT_SYSTEM_PROMPT = `You are a senior AI systems architect. A human reviewer is pasting in a completed customer-support conversation, along with their own instructions about what the bot should have done differently, and wants you to translate that into a concrete AI Brain system prompt change.
+
+${LANGUAGE_CONTEXT}
+
+ADDITIVE ONLY — no exceptions: you may only ever propose ADDING a new instruction to the end of the current prompt. You must NEVER propose removing, rewriting, shortening, reordering, or replacing any existing instruction — the current prompt is a carefully-tuned, load-bearing document. If the reviewer's instructions imply an existing instruction should be overridden in some case, ADD a new instruction that explicitly says so (e.g. "Override the earlier instruction about X — in case Y, do Z instead"), never delete or edit the original.
+
+Trust the human reviewer's instructions as the primary signal — they know exactly what went wrong and what they want changed. Use the transcript for context (what actually happened) to phrase a precise, generalizable instruction, not a one-off fix that only matches this exact conversation's wording.
+
+Respond with ONLY a single JSON object, no other text, no markdown fences:
+{
+  "shouldChange": true | false,
+  "reasoning": "Plain-language explanation of why this change follows from the transcript and the reviewer's instructions — shown directly to a human admin.",
+  "proposedAppendText": "Only if shouldChange is true: just the new instruction(s) to add to the end of the current prompt, generalized beyond this one exchange. Omit or empty string otherwise."
+}
+
+Set shouldChange to false only if the reviewer's instructions don't actually imply any generalizable prompt change (e.g. they were just noting a one-off fluke).`;
+
+export function buildDumpedChatUserPrompt(params: {
+  currentSystemPrompt: string;
+  transcript: string;
+  instructions: string;
+}): string {
+  return `CURRENT AI BRAIN SYSTEM PROMPT:
+"""
+${params.currentSystemPrompt}
+"""
+
+PASTED CONVERSATION TRANSCRIPT:
+"""
+${params.transcript}
+"""
+
+REVIEWER'S INSTRUCTIONS (what the bot should/shouldn't have done):
+"""
+${params.instructions}
+"""
+
+Decide whether the system prompt should change, and respond with the JSON object described in your instructions.`;
+}
+
+// Refine & resubmit — a reviewer looked at an already-proposed change and
+// wants it adjusted rather than accepted or declined outright. Works from
+// the suggestion's own stored fields only (no original transcript/findings
+// needed), so it applies uniformly regardless of which tool produced the
+// original suggestion.
+export const REFINE_SUGGESTION_SYSTEM_PROMPT = `You are a senior AI systems architect. A human reviewer is looking at a proposed addition to an AI Brain system prompt and has more feedback before deciding whether to accept it.
+
+Revise the proposed addition to incorporate the reviewer's feedback. Keep it additive-only (an instruction to append, not a rewrite of the whole prompt), concrete, and generalizable — not narrowly worded to only one example.
+
+Respond with ONLY a single JSON object, no other text, no markdown fences:
+{
+  "reasoning": "Plain-language explanation of what changed from the original proposal and why, incorporating the reviewer's feedback.",
+  "proposedAppendText": "The revised instruction(s) to add to the end of the current prompt."
+}`;
+
+export function buildRefineSuggestionUserPrompt(params: {
+  proposedAppendText: string;
+  reasoning: string;
+  additionalFeedback: string;
+}): string {
+  return `ORIGINALLY PROPOSED ADDITION:
+"""
+${params.proposedAppendText}
+"""
+
+ORIGINAL REASONING:
+"""
+${params.reasoning}
+"""
+
+REVIEWER'S ADDITIONAL FEEDBACK:
+"""
+${params.additionalFeedback}
+"""
+
+Revise the proposed addition per the feedback, and respond with the JSON object described in your instructions.`;
+}

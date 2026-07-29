@@ -1,4 +1,5 @@
 import { AiConfigService, PLATFORM_CONFIG_ID } from "@ai-chat-platform/ai-config";
+import type { AiConfigParameters } from "@ai-chat-platform/ai-config";
 import type { TenantService } from "@ai-chat-platform/tenant";
 
 export class AiConfigController {
@@ -48,6 +49,28 @@ export class AiConfigController {
     }
 
     return this.aiConfig.append(businessId, additionalText, note);
+  }
+
+  /** Overrides all AI providers for this business with the same tuning
+   * parameters — the "Parameters" tab's Save button. */
+  updateParameters(params: AiConfigParameters, note?: string, businessId: string = PLATFORM_CONFIG_ID) {
+    if (!(params.maxTokens >= 1)) {
+      throw new Error("maxTokens must be at least 1.");
+    }
+
+    if (params.topP != null && !(params.topP >= 0 && params.topP <= 1)) {
+      throw new Error("topP must be between 0 and 1.");
+    }
+
+    if (params.frequencyPenalty != null && !(params.frequencyPenalty >= -2 && params.frequencyPenalty <= 2)) {
+      throw new Error("frequencyPenalty must be between -2 and 2.");
+    }
+
+    if (params.presencePenalty != null && !(params.presencePenalty >= -2 && params.presencePenalty <= 2)) {
+      throw new Error("presencePenalty must be between -2 and 2.");
+    }
+
+    return this.aiConfig.setParameters(businessId, params, note);
   }
 
   private static readonly VALID_LANGUAGE_MODES = new Set(["auto", "english", "bangla", "banglish"]);

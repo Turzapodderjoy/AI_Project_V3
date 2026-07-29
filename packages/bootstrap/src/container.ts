@@ -165,7 +165,8 @@ export class Container {
           chatAnalysisPipeline,
           promptSuggestionService,
           pipelineRuns,
-          tenants
+          tenants,
+          conversations
         ),
         new ChannelController(
           channelConnections,

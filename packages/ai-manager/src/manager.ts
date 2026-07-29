@@ -277,7 +277,16 @@ export class AIManager {
 
   async chat(
     message: string,
-    options: { temperature?: number; systemPrompt?: string; maxTokens?: number } = {}
+    options: {
+      temperature?: number;
+      systemPrompt?: string;
+      maxTokens?: number;
+      topP?: number;
+      frequencyPenalty?: number;
+      presencePenalty?: number;
+      stop?: string[];
+      seed?: number;
+    } = {}
   ): Promise<{ provider: string; response: string; tokens: number }> {
     const result = await this.generate({
       userId: "anonymous",
@@ -286,6 +295,11 @@ export class AIManager {
       temperature: options.temperature,
       systemPrompt: options.systemPrompt,
       maxTokens: options.maxTokens,
+      topP: options.topP,
+      frequencyPenalty: options.frequencyPenalty,
+      presencePenalty: options.presencePenalty,
+      stop: options.stop,
+      seed: options.seed,
     });
 
     return {

@@ -280,7 +280,22 @@ model AiConfigVersion {
   // regardless of what language the customer writes in.
   languageMode String   @default("auto")
 
-  changeType   String   // "seed" | "update" | "append" | "language"
+  // Provider-tuning parameters, overriding all AI providers uniformly for
+  // this business. maxTokens replaces the old hardcoded ANSWER_MAX_TOKENS
+  // constant — every business now controls its own answer length. The
+  // rest are nullable: null means "let the provider use its own default"
+  // rather than forcing every provider to the same numeric default.
+  maxTokens        Int     @default(1024)
+  topP             Float?
+  frequencyPenalty Float?
+  presencePenalty  Float?
+  // Comma-separated — Postgres text array would need a migration-visible
+  // type change for a field this rarely used; a plain string parsed at
+  // the call site is the smaller diff.
+  stopSequences    String?
+  seed             Int?
+
+  changeType   String   // "seed" | "update" | "append" | "language" | "parameters"
   note         String?
 
   createdAt    DateTime @default(now())
@@ -398,6 +413,11 @@ model PromptSuggestion {
 
   businessId            String
 
+  // "pipeline" (nightly cron) | "training_arena" (live arena session) |
+  // "dumped_chat" (pasted transcript + instructions) — which tool
+  // produced this suggestion, shown as a badge in the review panel.
+  source                String    @default("pipeline")
+
   // "update" | "append" — mirrors AiConfigVersion.changeType
   kind                  String
   // Full replacement text, only set when kind = "update"
@@ -409,7 +429,8 @@ model PromptSuggestion {
   // buttons — "why this change is being suggested."
   reasoning             String
 
-  // "pending" | "accepted" | "declined"
+  // "pending" | "accepted" | "declined" | "superseded" (refined into a
+  // new pending suggestion, kept for audit trail rather than deleted)
   status                String    @default("pending")
 
   // Which PipelineRun produced this — nullable so older rows (created

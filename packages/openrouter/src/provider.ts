@@ -38,6 +38,11 @@ export class OpenRouterProvider implements AIProvider {
         ],
         temperature: request.temperature,
         max_tokens: request.maxTokens,
+        top_p: request.topP,
+        frequency_penalty: request.frequencyPenalty,
+        presence_penalty: request.presencePenalty,
+        stop: request.stop,
+        seed: request.seed,
       }),
     });
 

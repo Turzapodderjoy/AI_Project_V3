@@ -3,28 +3,30 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
-import { ChatWidget } from "../../../components/ChatWidget";
 import { KnowledgeHubPanel } from "../../../components/KnowledgeHubPanel";
 import { HandoffsPanel } from "../../../components/HandoffsPanel";
 import { StoragePanel } from "../../../components/StoragePanel";
 import { AiBrainPanel } from "../../../components/AiBrainPanel";
+import { AiParametersPanel } from "../../../components/AiParametersPanel";
+import { TrainingReviewPanel } from "../../../components/TrainingReviewPanel";
 import { ChannelsPanel } from "../../../components/ChannelsPanel";
 import { ClientOverviewPanel } from "../../../components/ClientOverviewPanel";
 import { TrainingArenaPanel } from "../../../components/TrainingArenaPanel";
 import { DashboardShell, type NavGroup } from "../../../components/DashboardShell";
 
-type Tab = "overview" | "knowledge" | "chat" | "handoffs" | "storage" | "brain" | "training" | "channels";
+type Tab = "overview" | "knowledge" | "handoffs" | "storage" | "brain" | "parameters" | "arena" | "review" | "channels";
 
 const NAV_GROUPS: NavGroup<Tab>[] = [
   {
     items: [
       { id: "overview", label: "Overview" },
       { id: "knowledge", label: "Knowledge Hub" },
-      { id: "chat", label: "Chat Demo" },
       { id: "handoffs", label: "Handoffs" },
       { id: "storage", label: "Storage" },
       { id: "brain", label: "AI Brain" },
-      { id: "training", label: "Training Arena" },
+      { id: "parameters", label: "Parameters" },
+      { id: "arena", label: "Training Arena" },
+      { id: "review", label: "Training Review" },
       { id: "channels", label: "Integrations" },
     ],
   },
@@ -90,9 +92,6 @@ export default function ClientDashboardPage() {
       <div style={{ display: tab === "knowledge" ? "block" : "none" }}>
         <KnowledgeHubPanel businessId={businessId} />
       </div>
-      <div style={{ display: tab === "chat" ? "block" : "none" }}>
-        <ChatWidget businessId={businessId} businessName={client?.name} />
-      </div>
       <div style={{ display: tab === "handoffs" ? "block" : "none" }}>
         <HandoffsPanel businessId={businessId} />
       </div>
@@ -102,8 +101,14 @@ export default function ClientDashboardPage() {
       <div style={{ display: tab === "brain" ? "block" : "none" }}>
         <AiBrainPanel businessId={businessId} />
       </div>
-      <div style={{ display: tab === "training" ? "block" : "none" }}>
+      <div style={{ display: tab === "parameters" ? "block" : "none" }}>
+        <AiParametersPanel businessId={businessId} />
+      </div>
+      <div style={{ display: tab === "arena" ? "block" : "none" }}>
         <TrainingArenaPanel businessId={businessId} />
+      </div>
+      <div style={{ display: tab === "review" ? "block" : "none" }}>
+        <TrainingReviewPanel businessId={businessId} />
       </div>
       <div style={{ display: tab === "channels" ? "block" : "none" }}>
         <ChannelsPanel businessId={businessId} />

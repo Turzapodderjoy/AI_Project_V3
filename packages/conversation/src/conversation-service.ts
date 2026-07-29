@@ -142,4 +142,36 @@ export class ConversationService {
   async deleteByBusinessId(businessId: string): Promise<void> {
     await prisma.conversation.deleteMany({ where: { businessId } });
   }
+
+  /** Past Training Arena sessions for the Intercom-style sidebar — most
+   * recent first, with a preview of the last message and whether the
+   * session has already been reviewed (has a ChatAnalysis row). */
+  async listTrainingSessions(businessId: string): Promise<
+    Array<{
+      id: string;
+      updatedAt: Date;
+      messageCount: number;
+      lastMessage: string | null;
+      reviewed: boolean;
+    }>
+  > {
+    const rows = await prisma.conversation.findMany({
+      where: { businessId, isTraining: true },
+      orderBy: { updatedAt: "desc" },
+      take: 100,
+      include: {
+        messages: { orderBy: { createdAt: "desc" }, take: 1 },
+        chatAnalysis: { select: { id: true } },
+        _count: { select: { messages: true } },
+      },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      updatedAt: row.updatedAt,
+      messageCount: row._count.messages,
+      lastMessage: row.messages[0]?.content ?? null,
+      reviewed: row.chatAnalysis !== null,
+    }));
+  }
 }

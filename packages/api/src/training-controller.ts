@@ -6,13 +6,15 @@ import {
 } from "@ai-chat-platform/training-pipeline";
 import { AiConfigService, PLATFORM_CONFIG_ID } from "@ai-chat-platform/ai-config";
 import type { TenantService } from "@ai-chat-platform/tenant";
+import type { ConversationService } from "@ai-chat-platform/conversation";
 
 /**
- * Read/decide surface for the Training & Insights dashboard panel — the
+ * Read/decide surface for the Training Review dashboard panel — the
  * actual analysis/suggestion GENERATION happens in the daily cron
- * (chat-analysis-pipeline.ts / prompt-suggestion-service.ts), not here.
- * This controller only reads what's already been produced and lets an
- * admin accept/decline a pending suggestion.
+ * (chat-analysis-pipeline.ts / prompt-suggestion-service.ts) or on-demand
+ * from the Training Arena, not here. This controller reads what's already
+ * been produced, lets an admin accept/decline/refine a pending suggestion,
+ * and lists Training Arena sessions for the Intercom-style sidebar.
  */
 export class TrainingController {
   constructor(
@@ -21,7 +23,8 @@ export class TrainingController {
     private readonly pipeline: ChatAnalysisPipeline,
     private readonly suggestions: PromptSuggestionService,
     private readonly runs_: PipelineRunService,
-    private readonly tenants: TenantService
+    private readonly tenants: TenantService,
+    private readonly conversations: ConversationService
   ) {}
 
   /** The daily 5am BST cron's entry point (triggeredBy "cron") — also
@@ -56,12 +59,43 @@ export class TrainingController {
     return this.analysis.analyses(businessId);
   }
 
-  pendingSuggestions() {
-    return this.analysis.pendingSuggestions();
+  pendingSuggestions(businessId?: string) {
+    return this.analysis.pendingSuggestions(businessId);
   }
 
-  decidedSuggestions() {
-    return this.analysis.decidedSuggestions();
+  decidedSuggestions(businessId?: string) {
+    return this.analysis.decidedSuggestions(businessId);
+  }
+
+  /** Training Arena's "Dump a chat" mode — interprets a pasted transcript
+   * of an already-completed chat plus free-text instructions, proposing
+   * an AI Brain change the same way a live arena session would. */
+  submitDump(businessId: string, transcript: string, instructions: string) {
+    if (!transcript.trim()) {
+      throw new Error("Transcript is required.");
+    }
+    if (!instructions.trim()) {
+      throw new Error("Instructions are required.");
+    }
+
+    return this.suggestions.submitDump(businessId, transcript, instructions);
+  }
+
+  /** Reviewer wants a pending suggestion adjusted rather than accepted or
+   * declined outright — marks the original superseded and returns a new
+   * pending suggestion in its place. */
+  refineSuggestion(id: string, additionalFeedback: string) {
+    if (!additionalFeedback.trim()) {
+      throw new Error("Feedback is required.");
+    }
+
+    return this.suggestions.refineSuggestion(id, additionalFeedback);
+  }
+
+  /** Past Training Arena sessions for this business (or the platform-wide
+   * arena) — the Intercom-style sidebar's list. */
+  listTrainingSessions(businessId: string) {
+    return this.conversations.listTrainingSessions(businessId);
   }
 
   /** Accepting writes a real new AiConfigVersion through the same
@@ -125,7 +159,7 @@ export class TrainingController {
       return { verdict, findings, suggestion: null };
     }
 
-    const suggestion = await this.suggestions.suggestFromFindings(businessId, [findings]);
+    const suggestion = await this.suggestions.suggestFromFindings(businessId, [findings], undefined, "training_arena");
 
     return { verdict, findings, suggestion };
   }

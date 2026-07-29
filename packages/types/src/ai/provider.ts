@@ -20,6 +20,13 @@ export interface AIRequest {
    * get cut off inconsistently for reasons unrelated to the question
    * actually asked. */
   maxTokens?: number;
+  /** Nucleus sampling — passed through as-is (top_p / topP depending on
+   * provider); undefined lets the provider use its own default. */
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  stop?: string[];
+  seed?: number;
 }
 
 export interface AIResponse {
